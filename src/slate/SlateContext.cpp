@@ -14,22 +14,31 @@ bool isAtoB(char c) {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
 }
 
+bool isSpecialCharacters(std::string s) {
+	return std::find(SlateDefinitions::specialCharacters.begin(), SlateDefinitions::specialCharacters.end(), s) != SlateDefinitions::specialCharacters.end();
+}
+
 std::string getNextTeX(std::string& s, size_t& i) {
 	if (s[i] != '\\') return "";
 	std::string name = "\\";
+	i++;
+	if (isSpecialCharacters(std::string(1, s[i])) && i < s.size()) {
+		name += s[i];
+		return name;
+	}
 	while (true) {
-		i++;
 		if (isAtoB(s[i]) && i < s.size()) name += s[i];
 		else {
 			i--;
 			break;
 		}
+		i++;
 	}
 	return name;
 }
 
 void skipWhiteSpaces(std::string& s, size_t& i) {
-	while (s[i] == ' ' && i+1 < s.size()) i++;
+	while (s[i] == ' ' && i < s.size()) i++;
 }
 
 void skipBackWhiteSpaces(std::string& s, size_t& i) {
@@ -52,14 +61,22 @@ void SlateContext::parse() {
 	}
 }
 
-bool increment(std::string& s, size_t& index) {
-	index++;
-	if (index > s.size()) return false;
-	return true;
+size_t jump(std::string& s, size_t& index) {
+	skipWhiteSpaces(s, index);
+	size_t begin = index;
+	if (s[index] != '\\') {
+		index++;
+	}
+	else {
+		std::string result = getNextTeX(s, index);
+		index++;
+	}
+	return begin;
 }
 
-std::string getNextIndivisible(std::string& s, size_t& index) {
+std::string peek(std::string& s, size_t index) {
 	skipWhiteSpaces(s, index);
+	if (index >= s.size()) return "";
 	if (s[index] != '\\') {
 		std::string result(1, s[index]);
 		return result;
@@ -68,57 +85,77 @@ std::string getNextIndivisible(std::string& s, size_t& index) {
 	return result;
 }
 
-std::string& advance(std::string& current, std::string& line, size_t& index) {
-	current = getNextIndivisible(line,index);
-	return current;
-}
-
 bool isEnd(std::string& line, size_t& i) {
 	return line.size() == i;
 }
 
+/*
+* @brief Used to skip and find the end of a curly bracket block
+* @param line = The string which contains the text information
+* @param start = The starting index of the opening curly bracket
+*/
+bool iterateOverBrackets(std::string& line, size_t& start) {
+	size_t openCount = 1;
+	char s;
+	bool ignoreNext = false; // Used to ignore things like \{ \} which represent the actual characters and now TeX syntax
+	while (openCount != 0) {
+		s = line[++start];
+		if (s == '{' && !ignoreNext) openCount++;
+		if (s == '}' && !ignoreNext) openCount--;
+		ignoreNext = false;
+		if (s == '\\') ignoreNext = true;
+		if (start >= line.size()) return false;
+	}
+	start++;
+	return true;
+}
+
 ParseError lexer(std::string& line, std::vector<Token>& tokens) {
-	ParseState state = ParseStates::BEGIN;
 	size_t begin = 0;
 	size_t end = 0;
-
-	std::string current;
 	size_t i = 0;
 
+
 	for (; i < line.size();) {
-		advance(current, line, i);
+		std::string current = peek(line, i);
+		if (current.size() == 0) return OK; // It means that all remaining text is just white spaces
 		if (isSymbolBase(current)) {
-			end = i;
-			if (!isEnd(line, i) && advance(current, line, i) == "_") {
+			begin = jump(line, i);
+			if (!isEnd(line, i) && peek(line, i) == "_") {
+				jump(line, i);
 				end = i;
 				if (isEnd(line, i)) return EMPTY_SUBSCRIPT;
-				if (advance(current, line, i) == "{") {
+				if (peek(line, i) == "{") {
+					jump(line, i);
 					end = i;
 					if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT;
-					if (advance(current, line, i) == "}") return EMPTY_SUBSCRIPT;
-					while (current != "}") {
-						if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT;
-						advance(current, line, i);
-					}
+					if (peek(line, i) == "}") return EMPTY_SUBSCRIPT;
+					if (!iterateOverBrackets(line,i)) return UNCLOSED_SUBSCRIPT;
 					end = i;
 				}
 				else {
-					if (isSymbolFlare(current)) {
-						if (advance(current, line, i) == "{") {
-							if (advance(current, line, i) == "}") return EMPTY_FLARE;
-							while (current != "}") {
-								if (isEnd(line, i)) return UNCLOSED_FLARE;
-								advance(current, line, i);
-							}
+					if (isSymbolFlare(peek(line, i))) {
+						jump(line, i);
+						end = i;
+						if (isEnd(line, i)) return EMPTY_FLARE;
+						if (peek(line, i) == "{") {
+							jump(line, i);
+							end = i;
+							if (isEnd(line, i)) return UNCLOSED_FLARE;
+							if (peek(line, i) == "}") return EMPTY_FLARE;
+							if (!iterateOverBrackets(line,i)) return UNCLOSED_FLARE;
 							end = i;
 						}
 					}
+					else {
+						jump(line, i);
+						end = i;
+					}
 				}
 			}
+			else end = i;
 
 			tokens.push_back(Token(SYMBOL, begin, end));
-			begin = end + 1;
-			i = end + 1;
 		}
 	}
 	return OK;

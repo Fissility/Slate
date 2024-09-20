@@ -4,6 +4,7 @@
 
 std::vector<std::string> SlateDefinitions::symbolBases;
 std::vector<std::string> SlateDefinitions::symbolFlares;
+std::vector<std::string> SlateDefinitions::specialCharacters;
 
 NSet* SlateDefinitions::N_set;
 ZSet* SlateDefinitions::Z_set;
@@ -28,6 +29,7 @@ void SlateDefinitions::load() {
 
 	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
 	dumpListToVec("slate_conf/symbol_flare.list", symbolFlares);
+	dumpListToVec("slate_conf/special_characters.list", specialCharacters);
 
 	N_set = new NSet();
 	Z_set = new ZSet();

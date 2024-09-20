@@ -13,6 +13,7 @@ namespace SlateDefinitions {
 
 	extern std::vector<std::string> symbolBases;
 	extern std::vector<std::string> symbolFlares;
+	extern std::vector<std::string> specialCharacters;
 
 	extern NSet* N_set;
 	extern ZSet* Z_set;
