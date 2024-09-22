@@ -35,7 +35,7 @@ void SlateDefinitions::load() {
 	Z_set = new ZSet();
 	Q_set = new QSet();
 	R_set = new RSet();
-	R2_set = R_set->cartesian(R_set);
+	R2_set = R_set->cartesian_with(R_set);
 
 	addition_func = new Function(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);

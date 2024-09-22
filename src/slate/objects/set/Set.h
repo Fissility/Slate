@@ -19,7 +19,31 @@ public:
 		return inImpl(o);
 	}
 
-	Set* cartesian(Set* other) {
+	Set* union_with(Set* other) {
+		return new Set(
+			[=](Object* o) {
+				return in(o) || other->in(o);
+			}
+		);
+	}
+
+	Set* intersection_with(Set* other) {
+		return new Set(
+			[=](Object* o) {
+				return in(o) && other->in(o);
+			}
+		);
+	}
+
+	Set* minus_with(Set* other) {
+		return new Set(
+			[=](Object* o) {
+				return in(o) && !other->in(o);
+			}
+		);
+	}
+
+	Set* cartesian_with(Set* other) {
 		return new Set(
 			[=](Object* o) {
 				if ((o->type) != TUPLE) return false;

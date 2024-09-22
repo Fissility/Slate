@@ -27,8 +27,8 @@ public:
 	std::unordered_map<std::string, Object*> nameMap;
 
 	ExpressionInfo newExpression();
-	void parse();
-	ParseError parseLine(std::string& line);
+	void processSyntax();
+	ParseError processSyntaxLine(std::string& line);
 	void removeExpresion(size_t index);
 	void brk();
 
