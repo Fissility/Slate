@@ -381,8 +381,89 @@ ParseError SlateContext::parser(std::vector<Token>& tokens) {
 	// TODO: Implement shunting yard
 	// TODO: function composition function
 
-
 	return OK;
+}
+
+// TODO, implement precedence function
+int precedence(Token token)
+{
+	return 1;
+}
+// TODO, implement isOperator
+bool isOperator(Token token)
+{
+	return true;
+}
+// TODO, implement rightAssociative
+bool rightAssociative(Token token)
+{
+	return true;
+}
+// TODO, implement isOperand
+bool isOperand(Token token)
+{
+	return true;
+}
+// TODO, implement isOpenBracket
+bool isOpenBracket(Token token)
+{
+	return true;
+}
+// TODO, implement isClosedBracket
+bool isClosedBracket(Token token)
+{
+	return true;
+}
+
+std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens)
+{
+	int output_idx = 0;
+	std::vector<Token> output;
+	std::vector<Token> operators;
+
+	for (Token token : tokens)
+	{
+		
+		if (isOperand(token))
+		{
+			output[output_idx++] = token;
+		}
+		else if (isOperator(token))
+		{
+			while(!empty(operators) && isOperator(operators.back()) && rightAssociative(token) &&  
+			((rightAssociative(token) && precedence(token) < precedence(operators.back())) ||
+                    (!rightAssociative(token) && precedence(token) <= precedence(operators.back()))))
+			{
+                output.push_back(operators.back());
+				operators.pop_back();
+			}
+
+			operators.push_back(token);
+		}
+		else if (isOpenBracket(token))
+		{
+			operators.push_back(token);
+		}
+		else if (isClosedBracket(token))
+		{
+			while (!empty(operators) && !isOpenBracket(operators.back()))
+			{
+				output.push_back(operators.back());
+				operators.pop_back();
+			}
+			if (!empty(operators) && isOpenBracket(operators.back()))
+			{
+				operators.pop_back();
+			}
+		}
+	}
+	while (!empty(operators))
+	{
+		output.push_back(operators.back());
+		operators.pop_back();
+	}
+
+	return output;
 }
 
 ParseError SlateContext::processSyntaxLine(std::string& line) {
