@@ -10,6 +10,9 @@ public:
 	}
 };
 
+typedef size_t TokenType;
+typedef size_t Operator;
+
 enum TokenTypes {
 	SYMBOL,					// Variable name
 	BEGIN_SCOPE,			// (
@@ -33,9 +36,40 @@ enum TokenTypes {
 	FOR_ALL,				// \forall
 	IN,						// \in
 	COMMA,					// ,
+
+	END_COUNT
 };
 
-typedef size_t TokenType;
+enum Operators {
+	ADDITION,
+	SUBTRACTION,
+	MULTIPLICATION,
+	DIVISION,
+	POWER,
+	FUNCTION,
+	ROUND_BRACKET
+};
+
+size_t getPresident(Operators token) {
+	switch (token) {
+		case ADDITION:
+		case SUBTRACTION:
+			return 1;
+		case MULTIPLICATION:
+			return 2;
+		case DIVISION:
+			return 2;
+		case POWER:
+			return 3;
+		case FUNCTION:
+			return 98;
+		case ROUND_BRACKET:
+			return 99;
+		default:
+			break;
+	}
+}
+
 
 struct Token {
 public:
@@ -53,4 +87,3 @@ enum LexerFlags {
 	FRACTION_OPEN_TOP,
 	FRACTION_OPEN_BOTTOM
 };
-

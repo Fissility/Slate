@@ -5,10 +5,7 @@
 #include "SlateErrors.h"
 #include <iostream>
 
-ExpressionInfo SlateContext::newExpression() {
-	expresions.push_back(new std::string(""));
-	return ExpressionInfo( *(expresions[expresions.size() - 1]), expresions.size() - 1 );
-}
+// ======================================================
 
 bool isAtoB(char c) {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
@@ -42,7 +39,7 @@ void skipWhiteSpaces(std::string& s, size_t& i) {
 }
 
 void skipBackWhiteSpaces(std::string& s, size_t& i) {
-	if (i > 0 && s[i-1]==' ') {
+	if (i > 0 && s[i - 1] == ' ') {
 		while (i > 0 && s[i] == ' ') i--;
 	}
 }
@@ -55,9 +52,9 @@ bool isSymbolFlare(std::string s) {
 	return std::find(SlateDefinitions::symbolFlares.begin(), SlateDefinitions::symbolFlares.end(), s) != SlateDefinitions::symbolFlares.end();
 }
 
-void SlateContext::parse() {
+void SlateContext::processSyntax() {
 	for (std::string* s : expresions) {
-		parseLine(*s);
+		processSyntaxLine(*s);
 	}
 }
 
@@ -86,7 +83,7 @@ std::string peek(std::string& s, size_t index) {
 }
 
 bool isEnd(std::string& line, size_t& i) {
-	return peek(line,i).size() == 0;
+	return peek(line, i).size() == 0;
 }
 
 /*
@@ -131,7 +128,8 @@ ParseError processSubscript(std::string& line, size_t& i) {
 			if (peek(line, i) == "\\right") passedRight = true;
 			jump(line, i);
 		}
-	} else {
+	}
+	else {
 		if (isSymbolFlare(peek(line, i))) {
 			jump(line, i);
 			if (isEnd(line, i)) return EMPTY_FLARE;
@@ -154,7 +152,21 @@ ParseError processSubscript(std::string& line, size_t& i) {
 	return OK;
 }
 
-ParseError lexer(std::string& line, std::vector<Token>& tokens) {
+// ======================================================
+
+SlateContext::SlateContext() {
+	nameMap["\\mathbbN"] = SlateDefinitions::N_set;
+	nameMap["\\mathbbZ"] = SlateDefinitions::Z_set;
+	nameMap["\\mathbbQ"] = SlateDefinitions::Q_set;
+	nameMap["\\mathbbR"] = SlateDefinitions::R_set;
+}
+
+ExpressionInfo SlateContext::newExpression() {
+	expresions.push_back(new std::string(""));
+	return ExpressionInfo( *(expresions[expresions.size() - 1]), expresions.size() - 1 );
+}
+
+ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t begin = 0;
 	size_t end = 0;
 	size_t i = 0;
@@ -364,7 +376,16 @@ ParseError lexer(std::string& line, std::vector<Token>& tokens) {
 	return OK;
 }
 
-ParseError SlateContext::parseLine(std::string& line) {
+ParseError SlateContext::parser(std::vector<Token>& tokens) {
+
+	// TODO: Implement shunting yard
+	// TODO: function composition function
+
+
+	return OK;
+}
+
+ParseError SlateContext::processSyntaxLine(std::string& line) {
 	std::vector<Token> tokens;
 
 	ParseError e = lexer(line, tokens);

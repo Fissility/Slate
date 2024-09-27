@@ -24,10 +24,14 @@ private:
 
 public:
 
+	SlateContext();
+
 	std::unordered_map<std::string, Object*> nameMap;
 
 	ExpressionInfo newExpression();
 	void processSyntax();
+	ParseError lexer(std::string& line, std::vector<Token>& tokens);
+	ParseError parser(std::vector<Token>& tokens);
 	ParseError processSyntaxLine(std::string& line);
 	void removeExpresion(size_t index);
 	void brk();
