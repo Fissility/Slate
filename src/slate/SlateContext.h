@@ -36,16 +36,9 @@ public:
 	/**
 	 * Function to perform shunting yard on a token of vectors.
 	*/
-	std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens);
+	std::vector<Token> shuntingYard(std::vector<Token>& tokens);
 	ParseError processSyntaxLine(std::string& line);
 	void removeExpresion(size_t index);
-
-	int precedence(Token token);
-	bool isOperator(Token token);
-	bool rightAssociative(Token token);
-	bool isOperand(Token token);
-	bool isOpenBracket(Token token);
-	bool isClosedBracket(Token token);
 
 	void brk();
 

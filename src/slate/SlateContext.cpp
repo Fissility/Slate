@@ -404,15 +404,19 @@ bool isOperand(Token token)
 {
 	return true;
 }
-// TODO, implement isOpenBracket
+
 bool isOpenBracket(Token token)
 {
-	return true;
+	return token.type == TokenTypes::BEGIN_SCOPE;
 }
-// TODO, implement isClosedBracket
+
 bool isClosedBracket(Token token)
 {
-	return true;
+	return token.type == TokenTypes::END_SCOPE;
+}
+
+bool isComma(Token token) {
+	return token.type == TokenTypes::COMMA;
 }
 
 std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens)
@@ -421,44 +425,50 @@ std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens)
 	std::vector<Token> output;
 	std::vector<Token> operators;
 
-	for (Token token : tokens)
-	{
-		
-		if (isOperand(token))
-		{
+	for (Token token : tokens) {
+
+		if (isOperand(token)) {
+
 			output[output_idx++] = token;
+
 		}
-		else if (isOperator(token))
-		{
-			while(!empty(operators) && isOperator(operators.back()) && rightAssociative(token) &&  
-			((rightAssociative(token) && precedence(token) < precedence(operators.back())) ||
-                    (!rightAssociative(token) && precedence(token) <= precedence(operators.back()))))
-			{
-                output.push_back(operators.back());
+		else if (isOperator(token)) {
+
+			while (
+				!empty(operators) &&
+				isOperator(operators.back()) &&
+				rightAssociative(token) &&
+				(
+					(rightAssociative(token) && precedence(token) < precedence(operators.back())) ||
+					(!rightAssociative(token) && precedence(token) <= precedence(operators.back()))
+				)
+			) {
+
+				output.push_back(operators.back());
 				operators.pop_back();
 			}
 
 			operators.push_back(token);
+
 		}
-		else if (isOpenBracket(token))
-		{
+		else if (isOpenBracket(token)) {
+
 			operators.push_back(token);
+
 		}
-		else if (isClosedBracket(token))
-		{
-			while (!empty(operators) && !isOpenBracket(operators.back()))
-			{
+		else if (isClosedBracket(token)) {
+
+			while (!empty(operators) && !isOpenBracket(operators.back())) {
 				output.push_back(operators.back());
 				operators.pop_back();
 			}
-			if (!empty(operators) && isOpenBracket(operators.back()))
-			{
+			if (!empty(operators) && isOpenBracket(operators.back())) {
 				operators.pop_back();
 			}
+
 		}
 	}
-	while (!empty(operators))
-	{
+	while (!empty(operators)) {
 		output.push_back(operators.back());
 		operators.pop_back();
 	}

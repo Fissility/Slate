@@ -12,3 +12,6 @@
 #define UNCLOSED_FRACTION {-6, std::format("Unclosed fraction at {}",i)}
 
 // Parser
+
+#define BRACKET_NOT_CLOSED {-6, std::format("Bracket at {} was not closed",i)}
+#define BRACKET_NOT_OPENED {-7, std::format("Bracket at {} was nenver opened",i)}
