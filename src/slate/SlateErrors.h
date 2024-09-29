@@ -1,17 +1,18 @@
 #pragma once
 
-#define OK {0,"OK"}
+#define OK {0,"OK",0,0}
 
 // Lexer
 
-#define OUT_OF_PLACE {-1, std::format("Out of place symbol at {}",i)}
-#define EMPTY_SUBSCRIPT { -2, std::format("Empty subscript at {}",i) }
-#define UNCLOSED_SUBSCRIPT { -3, std::format("Unclosed subscript at {}",i) }
-#define EMPTY_FLARE {-4, std::format("Empty flare at {}",i)}
-#define UNCLOSED_FLARE {-5, std::format("Unclosed flare at {}",i)}
-#define UNCLOSED_FRACTION {-6, std::format("Unclosed fraction at {}",i)}
+#define OUT_OF_PLACE(S,E) {-1, std::format("Out of place symbol at {}",S),S,E}
+#define EMPTY_SUBSCRIPT(S,E) { -2, std::format("Empty subscript at {}",S),S,E}
+#define UNCLOSED_SUBSCRIPT(S,E) { -3, std::format("Unclosed subscript at {}",S),S,E}
+#define EMPTY_FLARE(S,E) {-4, std::format("Empty flare at {}",S),S,E}
+#define UNCLOSED_FLARE(S,E) {-5, std::format("Unclosed flare at {}",S),S,E}
+#define UNCLOSED_FRACTION(S,E) {-6, std::format("Unclosed fraction at {}",S),S,E}
 
 // Parser
 
-#define BRACKET_NOT_CLOSED {-6, std::format("Bracket at {} was not closed",i)}
-#define BRACKET_NOT_OPENED {-7, std::format("Bracket at {} was nenver opened",i)}
+#define BRACKET_NOT_CLOSED(S,E) {-6, std::format("Bracket at {} was not closed",i),S),S,E}
+#define BRACKET_NOT_OPENED(S,E) {-7, std::format("Bracket at {} was nenver opened",S),S,E}
+#define OPERATOR_NOT_DEFINED(S,E) {-8, std::format("Operator at {} was never defined",E),S,E}

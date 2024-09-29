@@ -19,6 +19,10 @@ public:
 		return inImpl(o);
 	}
 
+	/*
+	* @brief The union operation on two sets
+	* @return Returns a set which is the union of the two
+	*/
 	Set* union_with(Set* other) {
 		return new Set(
 			[=](Object* o) {
@@ -27,6 +31,10 @@ public:
 		);
 	}
 
+	/*
+	* @brief Intersection operation on two sets
+	* @return Returns a set which is the intersection of the two
+	*/
 	Set* intersection_with(Set* other) {
 		return new Set(
 			[=](Object* o) {
@@ -35,6 +43,10 @@ public:
 		);
 	}
 
+	/*
+	* @brief Minus operation between two sets
+	* @return Returns a set which contains all elements in the first set that are not in the second set
+	*/
 	Set* minus_with(Set* other) {
 		return new Set(
 			[=](Object* o) {
@@ -43,6 +55,10 @@ public:
 		);
 	}
 
+	/*
+	* @brief Cartesian operation between two sets
+	* @return Returns the set which is the cartesian product of the two sets
+	*/
 	Set* cartesian_with(Set* other) {
 		Set* prod = new Set(
 			[=](Object* o) {
@@ -64,18 +80,20 @@ public:
 					}
 					return true;
 				}
+				return false;
 			}
 		);
-		if (auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(this);
+		// Push all sets for non canonical notation processing
+		if (auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(this); // Means it is not composed of something else
 		else {
 			for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
-				prod->auxiliaryMemory.push_back(auxiliaryMemory[i]);
+				prod->auxiliaryMemory.push_back(auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
 			}
 		}
-		if (other->auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(other);
+		if (other->auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(other); // Means it is not composed of something else
 		else {
 			for (size_t i = 0; i < other->auxiliaryMemory.size();i++) {
-				prod->auxiliaryMemory.push_back(other->auxiliaryMemory[i]);
+				prod->auxiliaryMemory.push_back(other->auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
 			}
 		}
 		return prod;

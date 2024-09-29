@@ -15,19 +15,27 @@ typedef size_t InputType;
 class Function : public Object {
 public:
 
-	InputType inputType;
-
 	Set* domain;
 	Set* codomain;
 
 	std::function<Object* (Object*)> mapping;
 
+	bool implemented = false;
 
-	Function(Set* domain, Set* codomain, std::function<Object* (Object*)> mapping, InputType iType = InputTypes::NORMAL) {
+
+	Function(Set* domain, Set* codomain, std::function<Object* (Object*)> mapping) {
+		this->type = Types::FUNCTION;
 		this->mapping = mapping;
-		this->inputType = iType;
 		this->domain = domain;
 		this->codomain = codomain;
+		this->implemented = true;
+	}
+
+	Function(Set* domain, Set* codomain) {
+		this->type = Types::FUNCTION;
+		this->domain = domain;
+		this->codomain = codomain;
+		this->implemented = false;
 	}
 
 

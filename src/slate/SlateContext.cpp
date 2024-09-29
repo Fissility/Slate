@@ -52,10 +52,12 @@ bool isSymbolFlare(std::string s) {
 	return std::find(SlateDefinitions::symbolFlares.begin(), SlateDefinitions::symbolFlares.end(), s) != SlateDefinitions::symbolFlares.end();
 }
 
-void SlateContext::processSyntax() {
-	for (std::string* s : expresions) {
-		processSyntaxLine(*s);
-	}
+bool isSymbolFlare(std::string s) {
+	return std::find(SlateDefinitions::symbolFlares.begin(), SlateDefinitions::symbolFlares.end(), s) != SlateDefinitions::symbolFlares.end();
+}
+
+bool isBinaryOperator(std::string s) {
+	return std::find(SlateDefinitions::binaryOperators.begin(), SlateDefinitions::binaryOperators.end(), s) != SlateDefinitions::binaryOperators.end();
 }
 
 size_t jump(std::string& s, size_t& index) {
@@ -107,45 +109,45 @@ bool iterateOverBrackets(std::string& line, size_t& start) {
 	return true;
 }
 
-ParseError processSubscript(std::string& line, size_t& i) {
-	if (isEnd(line, i)) return EMPTY_SUBSCRIPT;
+ParseError processSubscript(std::string& line, size_t& i, size_t begin) {
+	if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin,i);
 	if (peek(line, i) == "{") {
-		jump(line, i);
-		if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT;
-		if (peek(line, i) == "}") return EMPTY_SUBSCRIPT;
-		if (!iterateOverBrackets(line, i)) return UNCLOSED_SUBSCRIPT;
+		begin = jump(line, i);
+		if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
+		if (peek(line, i) == "}") return EMPTY_SUBSCRIPT(begin, i);
+		if (!iterateOverBrackets(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
 	}
 	else if (peek(line, i) == "\\left") {
-		jump(line, i);
+		begin = jump(line, i);
 		bool passedRight = false;
 		bool finished = false;
 		while (!finished) {
-			if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT;
+			if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
 			if (passedRight) {
 				if (peek(line, i) == ")") finished = true;
-				else return OUT_OF_PLACE;
+				else return OUT_OF_PLACE(begin, i);
 			}
 			if (peek(line, i) == "\\right") passedRight = true;
-			jump(line, i);
+			begin = jump(line, i);
 		}
 	}
 	else {
 		if (isSymbolFlare(peek(line, i))) {
-			jump(line, i);
-			if (isEnd(line, i)) return EMPTY_FLARE;
+			begin = jump(line, i);
+			if (isEnd(line, i)) return EMPTY_FLARE(begin, i);
 			if (peek(line, i) == "{") {
-				jump(line, i);
-				if (isEnd(line, i)) return UNCLOSED_FLARE;
-				if (peek(line, i) == "}") return EMPTY_FLARE;
-				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE;
+				begin = jump(line, i);
+				if (isEnd(line, i)) return UNCLOSED_FLARE(begin, i);
+				if (peek(line, i) == "}") return EMPTY_FLARE(begin, i);
+				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE(begin, i);
 			}
 			else {
-				if (isEnd(line, i)) return EMPTY_FLARE;
-				jump(line, i);
+				if (isEnd(line, i)) return EMPTY_FLARE(begin, i);
+				begin = jump(line, i);
 			}
 		}
 		else {
-			if (isEnd(line, i)) return EMPTY_SUBSCRIPT;
+			if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin, i);
 			jump(line, i);
 		}
 	}
@@ -159,6 +161,14 @@ SlateContext::SlateContext() {
 	nameMap["\\mathbbZ"] = SlateDefinitions::Z_set;
 	nameMap["\\mathbbQ"] = SlateDefinitions::Q_set;
 	nameMap["\\mathbbR"] = SlateDefinitions::R_set;
+	nameMap["+"] = SlateDefinitions::addition_func;
+	nameMap["-"] = SlateDefinitions::subtraction_func;
+	nameMap["\\div"] = SlateDefinitions::division_func;
+	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
+}
+
+bool SlateContext::nameExists(std::string name) {
+	return nameMap.find(name) != nameMap.end();
 }
 
 ExpressionInfo SlateContext::newExpression() {
@@ -184,7 +194,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == "}") {
 			if (flags[LexerFlags::FRACTION_OPEN_TOP]) {
 				begin = jump(line, i);
-				if (isEnd(line, i)) return UNCLOSED_FRACTION;
+				if (isEnd(line, i)) return UNCLOSED_FRACTION(begin,end);
 				if (peek(line, i) == "{") {
 					jump(line, i);
 					end = i;
@@ -192,7 +202,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 					flags[LexerFlags::FRACTION_OPEN_TOP] = false;
 					flags[LexerFlags::FRACTION_OPEN_BOTTOM] = true;
 				}
-				else return OUT_OF_PLACE;
+				else return OUT_OF_PLACE(begin, end);
 			}
 			else if (flags[LexerFlags::FRACTION_OPEN_BOTTOM]) {
 				begin = jump(line, i);
@@ -212,7 +222,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				ParseError err = processSubscript(line, i);
+				ParseError err = processSubscript(line, i, begin);
 				end = i;
 				if (err.id != 0) return err;
 			}
@@ -225,28 +235,35 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		// CHECK FOR FLARE START
 		if (isSymbolFlare(current)) {
 			begin = jump(line, i);
-			if (isEnd(line, i)) return EMPTY_FLARE;
+			if (isEnd(line, i)) return EMPTY_FLARE(begin, end);
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
-				if (isEnd(line, i)) return UNCLOSED_FLARE;
-				if (peek(line, i) == "}") return EMPTY_FLARE;
-				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE;
+				if (isEnd(line, i)) return UNCLOSED_FLARE(begin, end);
+				if (peek(line, i) == "}") return EMPTY_FLARE(begin, end);
+				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE(begin, end);
 				end = i;
 			}
 			else {
-				if (isEnd(line, i)) return EMPTY_FLARE;
+				if (isEnd(line, i)) return EMPTY_FLARE(begin, end);
 				jump(line, i);
 				end = i;
 			}
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				ParseError err = processSubscript(line, i);
+				ParseError err = processSubscript(line, i, begin);
 				end = i;
 				if (err.id != 0) return err;
 			}
 			tokens.push_back(Token(SYMBOL, begin, end));
+			continue;
+		}
+
+		if (isBinaryOperator(current)) {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(OPERATOR, begin, end));
 			continue;
 		}
 
@@ -274,104 +291,20 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			continue;
 		}
 
-		if (current == "+") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(ADDITION, begin, end));
-			continue;
-		}
-
-		if (current == "-") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(SUBTRACTION, begin, end));
-			continue;
-		}
-
-		if (current == "\\cdot") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(MULTIPILCATION, begin, end));
-			continue;
-		}
-
-		if (current == "\\div") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(DIVSION, begin, end));
-			continue;
-		}
-
-		if (current == "^") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(SUPERSCRIPT, begin, end));
-			continue;
-		}
-
 		if (current == "\\frac") {
 			begin = jump(line, i);
-			if (isEnd(line, i)) return UNCLOSED_FRACTION;
+			if (isEnd(line, i)) return UNCLOSED_FRACTION(begin, end);
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
 				tokens.push_back(Token(FRACTION_BEGIN_FIRST, begin, end));
 				flags[LexerFlags::FRACTION_OPEN_TOP] = true;
 			}
-			else return UNCLOSED_FRACTION;
+			else return UNCLOSED_FRACTION(begin, end);
 			continue;
 		}
 
-		if (current == ":") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(COLON, begin, end));
-			continue;
-		}
-
-		if (current == "|") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(VERTICAL_SEPARATOR, begin, end));
-			continue;
-		}
-
-		if (current == "\\Rightarrow") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(MAPS_TO, begin, end));
-			continue;
-		}
-
-		if (current == "\\times") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(CROSS, begin, end));
-			continue;
-		}
-
-		if (current == "\\forall") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(FOR_ALL, begin, end));
-			continue;
-		}
-
-		if (current == "\\in") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(IN, begin, end));
-			continue;
-		}
-
-		if (current == ",") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(COMMA, begin, end));
-			continue;
-		}
-
-		return OUT_OF_PLACE;
+		return OUT_OF_PLACE(begin, end);
 	}
 	return OK;
 }
@@ -384,79 +317,136 @@ ParseError SlateContext::parser(std::vector<Token>& tokens) {
 	return OK;
 }
 
-// TODO, implement precedence function
-int precedence(Token token)
-{
-	return 1;
-}
-// TODO, implement isOperator
-bool isOperator(Token token)
-{
-	return true;
-}
-// TODO, implement rightAssociative
-bool rightAssociative(Token token)
-{
-	return true;
-}
-// TODO, implement isOperand
-bool isOperand(Token token)
-{
-	return true;
-}
-
-bool isOpenBracket(Token token)
-{
-	return token.type == TokenTypes::BEGIN_SCOPE;
-}
-
-bool isClosedBracket(Token token)
-{
-	return token.type == TokenTypes::END_SCOPE;
+std::string normaliseName(std::string name) {
+	std::string normal;
+	bool lastWasBackS = false;
+	for (size_t i = 0; i < name.size(); i++) {
+		char c = name[i];
+		switch (c) {
+			case '{':
+			case '}':
+				if (lastWasBackS) {
+					normal += c;
+					lastWasBackS = false;
+				}
+				break;
+			case ' ' :
+				break;
+			case '\\':
+				lastWasBackS = true;
+				normal += c;
+				break;
+			default:
+				lastWasBackS = false;
+				normal += c;
+		}
+	}
 }
 
-bool isComma(Token token) {
-	return token.type == TokenTypes::COMMA;
-}
-
-std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens)
-{
-	int output_idx = 0;
-	std::vector<Token> output;
-	std::vector<Token> operators;
-
+ParseError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
 	for (Token token : tokens) {
-
-		if (isOperand(token)) {
-
-			output[output_idx++] = token;
+		std::string name = normaliseName(line.substr(token.begin, token.end));
+		switch (token.type) {
+			case TokenTypes::SYMBOL: {
+				if (nameExists(name)) {
+					objects.push_back(new Independent(nameMap[name]));
+				}
+				else {
+					objects.push_back(new Unknown(name));
+				}
+				break;
+			}
+			case TokenTypes::OPERATOR:
+				if (nameExists(name)) {
+					objects.push_back(new Independent(nameMap[name]));
+				}
+				else return OPERATOR_NOT_DEFINED(token.begin,token.end);
+				break;
+			case TokenTypes::BEGIN_SCOPE:
+				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE));
+				break;
+			case TokenTypes::END_SCOPE:
+				objects.push_back(new Marker(MarkerTypes::END_SCOPE));
+				break;
+			case TokenTypes::EQUALS:
+				objects.push_back(new Marker(MarkerTypes::EQUALS));
+				break;
 
 		}
-		else if (isOperator(token)) {
+	}
+	return OK;
+}
+
+// TODO, implement isOperator
+bool isOperator(ObjectSyntaxWrapper* wrapper) {
+	return true;
+}
+
+// TODO, implement isOperand
+bool isOperand(ObjectSyntaxWrapper* wrapper) {
+	return wrapper->type == SyntaxWrapperTypes::INDEPENDENT && ((Independent*)wrapper)->o->type == Types::BINARY_OPERATOR;
+}
+
+bool isOpenBracket(ObjectSyntaxWrapper* wrapper) {
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::BEGIN_SCOPE;
+}
+
+bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::END_SCOPE;
+}
+
+// TODO, implement precedence function
+int precedence(ObjectSyntaxWrapper* wrapper) {
+	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
+		switch (((Marker*)wrapper)->mType) {
+			case MarkerTypes::BEGIN_SCOPE:
+				return INT_MAX;
+			case MarkerTypes::EQUALS:
+				return INT_MIN;
+			default:
+				break;
+		}
+	}
+	if (isOperand(wrapper)) {
+		return ((BinaryOperator*)wrapper)->precedence;
+	}
+	return 0;
+}
+
+ParseError SlateContext::shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
+	int output_idx = 0;
+	std::vector<ObjectSyntaxWrapper*> output;
+
+	std::vector<ObjectSyntaxWrapper*> operators;
+
+	for (ObjectSyntaxWrapper* object : wrappers) {
+
+		if (isOperand(object)) {
+
+			output[output_idx++] = object;
+
+		}
+		else if (isOperator(object)) {
 
 			while (
 				!empty(operators) &&
 				isOperator(operators.back()) &&
-				rightAssociative(token) &&
-				(
-					(rightAssociative(token) && precedence(token) < precedence(operators.back())) ||
-					(!rightAssociative(token) && precedence(token) <= precedence(operators.back()))
-				)
+				precedence(object) <= precedence(operators.back())
 			) {
 
 				output.push_back(operators.back());
 				operators.pop_back();
 			}
 
-			operators.push_back(token);
+			operators.push_back(object);
 
 		}
-		else if (isOpenBracket(token)) {
+		else if (isOpenBracket(object)) {
 
-			operators.push_back(token);
+			operators.push_back(object);
 
 		}
-		else if (isClosedBracket(token)) {
+		else if (isClosedBracket(object)) {
 
 			while (!empty(operators) && !isOpenBracket(operators.back())) {
 				output.push_back(operators.back());
@@ -473,7 +463,13 @@ std::vector<Token> SlateContext::shuntingYard(std::vector<Token>& tokens)
 		operators.pop_back();
 	}
 
-	return output;
+	return OK;
+}
+
+void SlateContext::processSyntax() {
+	for (std::string* s : expresions) {
+		processSyntaxLine(*s);
+	}
 }
 
 ParseError SlateContext::processSyntaxLine(std::string& line) {
@@ -481,7 +477,7 @@ ParseError SlateContext::processSyntaxLine(std::string& line) {
 
 	ParseError e = lexer(line, tokens);
 
-	return { 0,"" };
+	return OK;
 
 }
 

@@ -18,6 +18,10 @@ public:
 		}
 	}
 
+	~Tuple() {
+		delete[] objects;
+	}
+
 	Object* get(size_t index) {
 		return objects[index];
 	}

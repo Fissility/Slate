@@ -8,6 +8,7 @@ enum Types {
 	INTERVAL,
 	SET,
 	FUNCTION,
+	BINARY_OPERATOR,
 	TUPLE
 };
 
