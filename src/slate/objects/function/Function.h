@@ -7,6 +7,9 @@
 
 typedef size_t InputType;
 
+// The function object should not domain check what is passed when evaluating, the domain checking should be done by the evaluator
+// Failiure to provide the expected input type will result in undefined behaviour, most probably an exception
+
 class Function : public Object {
 public:
 
@@ -32,7 +35,6 @@ public:
 		this->codomain = codomain;
 		this->implemented = false;
 	}
-
 
 	Object* evaluate(Object* o) {
 		return mapping(o);

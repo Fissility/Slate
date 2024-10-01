@@ -1,19 +1,5 @@
 #pragma once
 
-struct ParseError {
-public:
-	int id;
-	std::string name;
-	size_t begin;
-	size_t end;
-	ParseError(int id, std::string name, size_t begin, size_t end) {
-		this->id = id;
-		this->name = name;
-		this->begin = begin;
-		this->end = end;
-	}
-};
-
 typedef size_t TokenType;
 typedef size_t Operator;
 
@@ -77,6 +63,7 @@ class ObjectSyntaxWrapper {
 public:
 
 	SyntaxWrapperType type;
+	// This is needed for error throwing so in the later stages errors can still point to a location in the initial string
 	Token* assosciatedToken;
 
 	ObjectSyntaxWrapper(SyntaxWrapperType type, Token* assosciatedToken) {
@@ -86,14 +73,26 @@ public:
 
 };
 
-class Independent : public ObjectSyntaxWrapper {
+namespace IndependentKinds {
+	enum IndependentKinds {
+		OPERATOR,
+		BINARY_OPERATOR,
+		OPERAND
+	};
+}
 
+typedef size_t IndependentKind;
+
+class Independent : public ObjectSyntaxWrapper {
 public:
 
 	Object* o;
 
-	Independent(Object* o, Token* assosciatedToken) : ObjectSyntaxWrapper(SyntaxWrapperTypes::INDEPENDENT, assosciatedToken) {
+	IndependentKind kind;
+
+	Independent(Object* o, Token* assosciatedToken, IndependentKind kind) : ObjectSyntaxWrapper(SyntaxWrapperTypes::INDEPENDENT, assosciatedToken) {
 		this->o = o;
+		this->kind = kind;
 	}
 
 };
