@@ -16,3 +16,4 @@
 #define BRACKET_NOT_CLOSED(S,E) {-6, std::format("Bracket at {} was not closed",i),S),S,E}
 #define BRACKET_NOT_OPENED(S,E) {-7, std::format("Bracket at {} was nenver opened",S),S,E}
 #define OPERATOR_NOT_DEFINED(S,E) {-8, std::format("Operator at {} was never defined",E),S,E}
+#define FLOATING_OPERATOR(S,E) {-9, std::format("Operator doesn't have elements on both sides"),S,E}

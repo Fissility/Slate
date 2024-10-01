@@ -4,6 +4,7 @@
 #include <format>
 #include "SlateErrors.h"
 #include <iostream>
+#include <stack>
 
 // ======================================================
 
@@ -46,10 +47,6 @@ void skipBackWhiteSpaces(std::string& s, size_t& i) {
 
 bool isSymbolBase(std::string s) {
 	return std::find(SlateDefinitions::symbolBases.begin(), SlateDefinitions::symbolBases.end(), s) != SlateDefinitions::symbolBases.end();
-}
-
-bool isSymbolFlare(std::string s) {
-	return std::find(SlateDefinitions::symbolFlares.begin(), SlateDefinitions::symbolFlares.end(), s) != SlateDefinitions::symbolFlares.end();
 }
 
 bool isSymbolFlare(std::string s) {
@@ -165,6 +162,8 @@ SlateContext::SlateContext() {
 	nameMap["-"] = SlateDefinitions::subtraction_func;
 	nameMap["\\div"] = SlateDefinitions::division_func;
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
+	nameMap["\\Rightarrow"] = SlateDefinitions::setCategoryBinding_func;
+	nameMap[","] = SlateDefinitions::tupleBind_func;
 }
 
 bool SlateContext::nameExists(std::string name) {
@@ -198,7 +197,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 				if (peek(line, i) == "{") {
 					jump(line, i);
 					end = i;
-					tokens.push_back(Token(FRACTION_BEGIN_SECOND, begin, end));
+					tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_SECOND, begin, end));
 					flags[LexerFlags::FRACTION_OPEN_TOP] = false;
 					flags[LexerFlags::FRACTION_OPEN_BOTTOM] = true;
 				}
@@ -207,7 +206,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			else if (flags[LexerFlags::FRACTION_OPEN_BOTTOM]) {
 				begin = jump(line, i);
 				end = i;
-				tokens.push_back(Token(FRACTION_END, begin, end));
+				tokens.push_back(Token(TokenTypes::FRACTION_END, begin, end));
 				flags[LexerFlags::FRACTION_OPEN_BOTTOM] = false;
 			}
 			else {
@@ -228,7 +227,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			}
 			else end = i;
 
-			tokens.push_back(Token(SYMBOL, begin, end));
+			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
 			continue;
 		}
 
@@ -256,14 +255,14 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 				end = i;
 				if (err.id != 0) return err;
 			}
-			tokens.push_back(Token(SYMBOL, begin, end));
+			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
 			continue;
 		}
 
 		if (isBinaryOperator(current)) {
 			begin = jump(line, i);
 			end = i;
-			tokens.push_back(Token(OPERATOR, begin, end));
+			tokens.push_back(Token(TokenTypes::OPERATOR, begin, end));
 			continue;
 		}
 
@@ -271,7 +270,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == "(") {
 			begin = jump(line, i);
 			end = i;
-			tokens.push_back(Token(BEGIN_SCOPE, begin, end));
+			tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, begin, end));
 			continue;
 		}
 
@@ -280,14 +279,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == ")") {
 			begin = jump(line, i);
 			end = i;
-			tokens.push_back(Token(END_SCOPE, begin, end));
-			continue;
-		}
-
-		if (current == "=") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(EQUALS, begin, end));
+			tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
 			continue;
 		}
 
@@ -297,7 +289,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
-				tokens.push_back(Token(FRACTION_BEGIN_FIRST, begin, end));
+				tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_FIRST, begin, end));
 				flags[LexerFlags::FRACTION_OPEN_TOP] = true;
 			}
 			else return UNCLOSED_FRACTION(begin, end);
@@ -309,10 +301,32 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	return OK;
 }
 
-ParseError SlateContext::parser(std::vector<Token>& tokens) {
+
+
+ParseError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 
 	// TODO: Implement shunting yard
 	// TODO: function composition function
+
+	bool done = false;
+
+	while (!done) {
+		for (size_t i = 0; i < wrappers.size(); i++) {
+			ObjectSyntaxWrapper* ow = wrappers[i];
+			if (ow->type == SyntaxWrapperTypes::INDEPENDENT) {
+				Independent* iow = (Independent*)ow;
+				Object* o = iow->o;
+				if (o->type == Types::BINARY_OPERATOR) {
+					if (i < 2) return FLOATING_OPERATOR(iow->assosciatedToken->begin,iow->assosciatedToken->end);
+					ObjectSyntaxWrapper* ow1 = wrappers[i - 1];
+					ObjectSyntaxWrapper* ow2 = wrappers[i - 2];
+					if (ow1->type == SyntaxWrapperTypes::INDEPENDENT && ow2->type == SyntaxWrapperTypes::INDEPENDENT) {
+						
+					}
+				}
+			}
+		}
+	}
 
 	return OK;
 }
@@ -341,35 +355,39 @@ std::string normaliseName(std::string name) {
 				normal += c;
 		}
 	}
+	return normal;
 }
 
 ParseError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
 	for (Token token : tokens) {
-		std::string name = normaliseName(line.substr(token.begin, token.end));
+		std::string name = normaliseName(line.substr(token.begin, token.end-token.begin));
 		switch (token.type) {
 			case TokenTypes::SYMBOL: {
 				if (nameExists(name)) {
-					objects.push_back(new Independent(nameMap[name]));
+					objects.push_back(new Independent(nameMap[name], &token));
 				}
 				else {
-					objects.push_back(new Unknown(name));
+					objects.push_back(new Unknown(name, &token));
 				}
 				break;
 			}
 			case TokenTypes::OPERATOR:
-				if (nameExists(name)) {
-					objects.push_back(new Independent(nameMap[name]));
+				if (name == "=") {
+					objects.push_back(new Marker(MarkerTypes::EQUALS, &token));
+					
+				} else if (name == ":") {
+					objects.push_back(new Marker(MarkerTypes::COLON,&token));
+					break;
+				} else if (nameExists(name)) {
+					objects.push_back(new Independent(nameMap[name],&token));
 				}
 				else return OPERATOR_NOT_DEFINED(token.begin,token.end);
 				break;
 			case TokenTypes::BEGIN_SCOPE:
-				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE));
+				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, &token));
 				break;
 			case TokenTypes::END_SCOPE:
-				objects.push_back(new Marker(MarkerTypes::END_SCOPE));
-				break;
-			case TokenTypes::EQUALS:
-				objects.push_back(new Marker(MarkerTypes::EQUALS));
+				objects.push_back(new Marker(MarkerTypes::END_SCOPE, &token));
 				break;
 
 		}
@@ -379,12 +397,21 @@ ParseError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>
 
 // TODO, implement isOperator
 bool isOperator(ObjectSyntaxWrapper* wrapper) {
-	return true;
+	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
+		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
+	}
+	return wrapper->type == SyntaxWrapperTypes::INDEPENDENT && (((Independent*)wrapper)->o->type == Types::BINARY_OPERATOR || ((Independent*)wrapper)->o->type == Types::FUNCTION);
 }
 
 // TODO, implement isOperand
 bool isOperand(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::INDEPENDENT && ((Independent*)wrapper)->o->type == Types::BINARY_OPERATOR;
+	if (wrapper->type == SyntaxWrapperTypes::UNKNOWN) return true;
+	if (wrapper->type == SyntaxWrapperTypes::DEPENDENT) return true;
+	if (wrapper->type == SyntaxWrapperTypes::INDEPENDENT) {
+		Independent* ind = (Independent*)wrapper;
+		if (ind->o->type != Types::FUNCTION && ind->o->type != BINARY_OPERATOR) return true;
+	}
+	return false;
 }
 
 bool isOpenBracket(ObjectSyntaxWrapper* wrapper) {
@@ -399,10 +426,10 @@ bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
 int precedence(ObjectSyntaxWrapper* wrapper) {
 	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
 		switch (((Marker*)wrapper)->mType) {
-			case MarkerTypes::BEGIN_SCOPE:
-				return INT_MAX;
 			case MarkerTypes::EQUALS:
 				return INT_MIN;
+			case MarkerTypes::COLON:
+				return INT_MIN + 1;
 			default:
 				break;
 		}
@@ -413,9 +440,7 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 	return 0;
 }
 
-ParseError SlateContext::shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
-	int output_idx = 0;
-	std::vector<ObjectSyntaxWrapper*> output;
+ParseError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
 
 	std::vector<ObjectSyntaxWrapper*> operators;
 
@@ -423,7 +448,7 @@ ParseError SlateContext::shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrapper
 
 		if (isOperand(object)) {
 
-			output[output_idx++] = object;
+			output.push_back(object);
 
 		}
 		else if (isOperator(object)) {
@@ -473,9 +498,20 @@ void SlateContext::processSyntax() {
 }
 
 ParseError SlateContext::processSyntaxLine(std::string& line) {
-	std::vector<Token> tokens;
 
-	ParseError e = lexer(line, tokens);
+	ParseError err = OK;
+
+	std::vector<Token> tokens;
+	err = lexer(line, tokens);
+	if (err.id != 0) return err;
+
+	std::vector<ObjectSyntaxWrapper*> wrappers;
+	err = linkTokensToObjects(line, tokens, wrappers);
+	if (err.id != 0) return err;
+
+	std::vector<ObjectSyntaxWrapper*> syOut;
+	err = shuntingYard(wrappers, syOut);
+	if (err.id != 0) return err;
 
 	return OK;
 

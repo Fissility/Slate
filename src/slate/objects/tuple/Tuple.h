@@ -12,10 +12,7 @@ public:
 	Tuple(size_t length,Object* os []) {
 		this->type = Types::TUPLE;
 		this->length = length;
-		objects = new Object*[length];
-		for (size_t i = 0; i < length; i++) {
-			objects[i] = os[i];
-		}
+		objects = os;
 	}
 
 	~Tuple() {

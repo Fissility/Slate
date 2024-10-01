@@ -5,11 +5,6 @@
 
 #include <functional>
 
-enum InputTypes {
-	NORMAL,
-	BINARY_OPERATOR
-};
-
 typedef size_t InputType;
 
 class Function : public Object {

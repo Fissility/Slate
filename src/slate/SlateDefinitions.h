@@ -7,15 +7,16 @@
 #include "objects/set/ZSet.h"
 #include "objects/set/QSet.h"
 #include "objects/set/RSet.h"
-#include "objects/set/USet.h"
+#include "objects/set/USets.h"
 #include "objects/function/BinaryOperator.h"
 
 enum Presidences {
-	ADDITION = 1,
-	SUBTRACTION = 1,
-	MULTIPLICATION = 2,
-	DIVISION = 2,
-	SET_BINDING = 3
+	ELEMENT_BINDING,
+	ADDITION,
+	SUBTRACTION = ADDITION,
+	MULTIPLICATION,
+	DIVISION = MULTIPLICATION,
+	SET_BINDING
 };
 
 namespace SlateDefinitions {
@@ -25,6 +26,8 @@ namespace SlateDefinitions {
 	extern std::vector<std::string> specialCharacters;
 	extern std::vector<std::string> binaryOperators;
 
+	extern AllSetsSet* AllSets_set;
+	extern Set* AllSets2_set;
 	extern USet* U_set;
 	extern Set* U2_set;
 	extern NSet* N_set;
@@ -38,6 +41,7 @@ namespace SlateDefinitions {
 	extern Function* division_func;
 	extern Function* power_func;
 	extern Function* setCategoryBinding_func;
+	extern Function* tupleBind_func;
 
 	void load();
 

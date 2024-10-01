@@ -9,7 +9,8 @@ enum Types {
 	SET,
 	FUNCTION,
 	BINARY_OPERATOR,
-	TUPLE
+	TUPLE,
+	CATEGORY
 };
 
 typedef size_t Type;

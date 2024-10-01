@@ -31,15 +31,10 @@ public:
 	bool nameExists(std::string name);
 	ExpressionInfo newExpression();
 	void processSyntax();
-	ParseError lexer(std::string& line, std::vector<Token>& tokens);
-	ParseError parser(std::vector<Token>& tokens);
-	ParseError linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects);
-
-	/**
-	 * Function to perform shunting yard on a token of vectors.
-	*/
-	ParseError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output);
 	ParseError processSyntaxLine(std::string& line);
+	ParseError lexer(std::string& line, std::vector<Token>& tokens);
+	ParseError linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects);
+	ParseError parser(std::vector<ObjectSyntaxWrapper*>& wrappers);
 	void removeExpresion(size_t index);
 
 	void brk();
