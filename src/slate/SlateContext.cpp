@@ -107,7 +107,7 @@ bool iterateOverBrackets(std::string& line, size_t& start) {
 }
 
 // gotta love TeX
-ParseError processSubscript(std::string& line, size_t& i, size_t begin) {
+SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
 	if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin,i);
 	if (peek(line, i) == "{") {
 		begin = jump(line, i);
@@ -182,9 +182,9 @@ void SlateContext::processSyntax() {
 	}
 }
 
-ParseError SlateContext::processSyntaxLine(std::string& line) {
+SlateError SlateContext::processSyntaxLine(std::string& line) {
 
-	ParseError err = OK;
+	SlateError err = OK;
 
 	std::vector<Token> tokens;
 	err = lexer(line, tokens);
@@ -202,7 +202,7 @@ ParseError SlateContext::processSyntaxLine(std::string& line) {
 
 }
 
-ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
+SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t begin = 0;
 	size_t end = 0;
 	size_t i = 0;
@@ -248,7 +248,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				ParseError err = processSubscript(line, i, begin);
+				SlateError err = processSubscript(line, i, begin);
 				end = i;
 				if (err.id != 0) return err;
 			}
@@ -278,7 +278,7 @@ ParseError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				ParseError err = processSubscript(line, i, begin);
+				SlateError err = processSubscript(line, i, begin);
 				end = i;
 				if (err.id != 0) return err;
 			}
@@ -360,9 +360,9 @@ bool isOperator(ObjectSyntaxWrapper* wrapper) {
 	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
 		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
 	}
-	if (wrapper->type == SyntaxWrapperTypes::INDEPENDENT) {
-		Independent* i = (Independent*)wrapper;
-		return i->kind == IndependentKinds::OPERATOR || i->kind == IndependentKinds::BINARY_OPERATOR;
+	if (wrapper->type == SyntaxWrapperTypes::KNOWN) {
+		Known* i = (Known*)wrapper;
+		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR;
 	}
 	return false;
 }
@@ -383,60 +383,73 @@ bool isOperand(ObjectSyntaxWrapper* wrapper) {
 /*
 * Links names to defined objects and classified them based on their role in the expression
 */
-ParseError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
+SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
 	for (Token token : tokens) {
-		std::string name = normaliseName(line.substr(token.begin, token.end-token.begin));
+		std::string name = normaliseName(line.substr(token.location.begin, token.location.end-token.location.begin));
 		switch (token.type) {
 			case TokenTypes::SYMBOL: {
 				if (nameExists(name)) {
 					Object* o = nameMap[name];
-					objects.push_back(new Independent(nameMap[name], &token, IndependentKinds::OPERAND));
+					Known* k = new Known(nameMap[name], KnownKinds::OPERAND);
+
+					k->addDebugLocation(token.location);
+
+					objects.push_back(k);
 				}
 				else {
-					objects.push_back(new Unknown(name, &token));
+					objects.push_back(new Unknown(name, token.location));
 				}
 				break;
 			}
-			case TokenTypes::OPERATOR:
+			case TokenTypes::OPERATOR: {
 				if (name == "=") {
 					objects.push_back(new Marker(MarkerTypes::EQUALS, &token));
-					
-				} else if (name == ":") {
-					objects.push_back(new Marker(MarkerTypes::COLON,&token));
-					break;
-				} else if (nameExists(name)) {
-					
-					IndependentKind kind;
 
-					if (objects.empty()) kind = IndependentKinds::OPERAND; // Means it is at the start, then it should be an operand
-					else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = IndependentKinds::OPERAND; // Means it is after an operator which means it is an operand
-					else kind = IndependentKinds::BINARY_OPERATOR; // It means it is an operator
-
-					objects.push_back(new Independent(nameMap[name],&token, kind));
 				}
-				else return OPERATOR_NOT_DEFINED(token.begin,token.end);
+				else if (name == ":") {
+					objects.push_back(new Marker(MarkerTypes::COLON, &token));
+					break;
+				}
+				else if (nameExists(name)) {
+
+					KnownKind kind;
+
+					if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
+					else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
+					else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
+
+					Known* k = new Known(nameMap[name], kind);
+
+					k->addDebugLocation(token.location);
+
+					objects.push_back(new Known(nameMap[name], kind));
+				}
+				else return OPERATOR_NOT_DEFINED(token.location.begin, token.location.end);
 				break;
-			case TokenTypes::BEGIN_SCOPE:
+			}
+			case TokenTypes::BEGIN_SCOPE: {
 
 				// This means if the last thing was a function mark that function as on operator
 				// If a function is not followed by ( as in, f(..) then it is assumed that the function is not evaluated here
 				// and instead it is treated as an operand, for example f+g, f-g, f \circ g
 				if (!objects.empty()) {
 					ObjectSyntaxWrapper* ow = objects.back();
-					if (ow->type == SyntaxWrapperTypes::INDEPENDENT) {
-						Independent* ind = (Independent*)ow;
+					if (ow->type == SyntaxWrapperTypes::KNOWN) {
+						Known* ind = (Known*)ow;
 						Object* o = ind->o;
 						if (o->type == Types::FUNCTION) {
-							ind->kind = IndependentKinds::OPERATOR;
+							ind->kind = KnownKinds::OPERATOR;
 						}
 					}
 				}
 
 				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, &token));
 				break;
-			case TokenTypes::END_SCOPE:
+			}
+			case TokenTypes::END_SCOPE: {
 				objects.push_back(new Marker(MarkerTypes::END_SCOPE, &token));
 				break;
+			}
 
 		}
 	}
@@ -461,7 +474,7 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 	return 0;
 }
 
-ParseError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
+SlateError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
 
 	std::vector<ObjectSyntaxWrapper*> operators;
 
@@ -500,15 +513,14 @@ ParseError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector
 			}
 			if (!empty(operators) && isOpenBracket(operators.back())) {
 				operators.pop_back();
-				if (!operators.empty() && operators.back()->type == SyntaxWrapperTypes::INDEPENDENT) {
-					Independent* i = (Independent*)operators.back();
-					if (i->kind == IndependentKinds::OPERAND) {
+				if (!operators.empty() && operators.back()->type == SyntaxWrapperTypes::KNOWN) {
+					Known* i = (Known*)operators.back();
+					if (i->kind == KnownKinds::OPERAND) {
 						output.push_back(operators.back());
 						operators.pop_back();
 					}
 				}
 			}
-
 		}
 	}
 	while (!empty(operators)) {
@@ -519,32 +531,104 @@ ParseError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector
 	return OK;
 }
 
-ParseError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
+// (x*4+y)*z
+// f(x) = *(4,x)
+// 
+
+Dependent* kod(Known* k, Known* op, Dependent* d) {
+	size_t ukn = d->uknownsCount();
+
+	Object* o_k = k->o;
+	BinaryOperator* o_op = (BinaryOperator*)op->o;
+	Function* f_d = d->o;
+
+	Tuple* holder = new Tuple(2);
+	(*holder)[0] = o_k;
+	Function* wrapper = new Function(f_d->domain, f_d->codomain, [=](Object* o) {
+		(*holder)[1] = f_d->evaluate(o);
+		// TYPE CHECK FOR o_op
+		return o_op->evaluate(holder);
+	});
+	wrapper->ownedMemeory.push_back(holder);
+
+	Dependent* newd = new Dependent(wrapper, op->locations[0]);
+
+	newd->addDebugLocationsFrom(k);
+	newd->addDebugLocationsFrom(d);
+
+	return newd;
+}
+
+Dependent* dok(Dependent* d, Known* op, Known* k) {
+
+	Object* o_k = k->o;
+	BinaryOperator* o_op = (BinaryOperator*)op->o;
+	Function* f_d = d->o;
+
+	Tuple* holder = new Tuple(2);
+	(*holder)[0] = o_k;
+	Function* wrapper = new Function(f_d->domain, o_op->codomain, [=](Object* o) {
+		(*holder)[1] = f_d->evaluate(o);
+		// TYPE CHECK FOR o_op
+		return o_op->evaluate(holder);
+		});
+	wrapper->ownedMemeory.push_back(holder);
+
+	Dependent* newd = new Dependent(wrapper, op->locations[0]);
+
+	newd->addDebugLocationsFrom(k);
+	newd->addDebugLocationsFrom(d);
+
+	return newd;
+}
+
+Dependent* dod(Dependent* dl, Known* op, Dependent* dr) {
+	size_t unknownsCountl = dl->uknownsCount();
+	size_t unknownsCountr = dr->uknownsCount();
+	size_t totalUnknowns = unknownsCountl + unknownsCountr;
+
+	// D(x,y)
+
+	Tuple* holder = new Tuple(totalUnknowns);
+	Function* wrapper = new Function();
+}
+
+SlateError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 	// TODO: function composition function
 
 	bool done = false;
 
 	while (!done) {
 		for (size_t i = 0; i < wrappers.size(); i++) {
+
 			ObjectSyntaxWrapper* ow = wrappers[i];
-			if (ow->type == SyntaxWrapperTypes::INDEPENDENT) {
-				Independent* iow = (Independent*)ow;
-				if (iow->kind == IndependentKinds::BINARY_OPERATOR) {
-					if (wrappers.size() < 2) return FLOATING_OPERATOR(ow->assosciatedToken->begin, ow->assosciatedToken->end);
+
+			if (ow->type == SyntaxWrapperTypes::KNOWN) {
+				Known* iow = (Known*)ow;
+
+				if (iow->kind == KnownKinds::BINARY_OPERATOR) {
+					if (wrappers.size() < 2) return FLOATING_OPERATOR(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
+
 					SyntaxWrapperType t1 = wrappers[i - 1]->type;
 					SyntaxWrapperType t2 = wrappers[i - 2]->type;
-					if (t1 == SyntaxWrapperTypes::INDEPENDENT && t2 == SyntaxWrapperTypes::INDEPENDENT) {
-						Independent* i1 = (Independent*)t1;
-						Independent* i2 = (Independent*)t2;
-						if (i1->kind != IndependentKinds::OPERAND || i2->kind != IndependentKinds::OPERAND) return FLOATING_OPERATOR(ow->assosciatedToken->begin, ow->assosciatedToken->end);
+
+					if (t1 == SyntaxWrapperTypes::KNOWN && t2 == SyntaxWrapperTypes::KNOWN) {
+						Known* i1 = (Known*)t1;
+
+						Known* i2 = (Known*)t2;
+						if (i1->kind != KnownKinds::OPERAND || i2->kind != KnownKinds::OPERAND) return FLOATING_OPERATOR(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
 						BinaryOperator* bo = (BinaryOperator*)iow->o;
 						Tuple t(2, new Object * [] {i1->o,i2->o});
-						if (!bo->domain->in(&t)) return DOMAIN_EXCEPTION(ow->assosciatedToken->begin, ow->assosciatedToken->end);
+						if (!bo->domain->in(&t)) return DOMAIN_EXCEPTION(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
 						Object* result = bo->evaluate(&t);
+
 						delete wrappers[i];
 						delete wrappers[i - 1];
 						delete wrappers[i - 2];
-						wrappers[i] = new Independent(result,nullptr,IndependentKinds::OPERAND);
+						Known* k = new Known(result,KnownKinds::OPERAND);
+						k->addDebugLocationsFrom(i1);
+						k->addDebugLocationsFrom(i2);
+						wrappers[i] = k;
 						wrappers.erase(wrappers.begin() + i - 2);
 						wrappers.erase(wrappers.begin() + i - 2);
 						i = i - 2;

@@ -18,8 +18,12 @@ typedef size_t Type;
 class Object {
 public:
 	std::vector<void*> auxiliaryMemory;
+	std::vector<void*> ownedMemeory;
 	Type type = Types::UNKNOWN;
+
 	~Object() {
-		for (void* i : auxiliaryMemory) delete i;
+		for (void* m : ownedMemeory) {
+			delete m;
+		}
 	}
 };

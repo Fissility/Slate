@@ -31,10 +31,10 @@ public:
 	bool nameExists(std::string name);
 	ExpressionInfo newExpression();
 	void processSyntax();
-	ParseError processSyntaxLine(std::string& line);
-	ParseError lexer(std::string& line, std::vector<Token>& tokens);
-	ParseError linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects);
-	ParseError parser(std::vector<ObjectSyntaxWrapper*>& wrappers);
+	SlateError processSyntaxLine(std::string& line);
+	SlateError lexer(std::string& line, std::vector<Token>& tokens);
+	SlateError linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects);
+	SlateError parser(std::vector<ObjectSyntaxWrapper*>& wrappers);
 	void removeExpresion(size_t index);
 
 	void brk();

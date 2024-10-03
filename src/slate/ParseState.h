@@ -20,15 +20,18 @@ namespace TokenTypes {
 	};
 }
 
+struct StringLocation {
+	size_t begin;
+	size_t end;
+};
+
 struct Token {
 public:
 	TokenType type;
-	size_t begin;
-	size_t end;
+	StringLocation location;
 	Token(TokenType type, size_t begin, size_t end) {
 		this->type = type;
-		this->begin = begin;
-		this->end = end;
+		location = { begin,end };
 	}
 };
 
@@ -39,7 +42,7 @@ enum LexerFlags {
 
 namespace SyntaxWrapperTypes {
 	enum SyntaxWrapperTypes {
-		INDEPENDENT,
+		KNOWN,
 		DEPENDENT,
 		UNKNOWN,
 		MARKER
@@ -73,26 +76,37 @@ public:
 
 };
 
-namespace IndependentKinds {
-	enum IndependentKinds {
+namespace KnownKinds {
+	enum KnownKinds {
 		OPERATOR,
 		BINARY_OPERATOR,
 		OPERAND
 	};
 }
 
-typedef size_t IndependentKind;
+typedef size_t KnownKind;
 
-class Independent : public ObjectSyntaxWrapper {
+class Known : public ObjectSyntaxWrapper {
 public:
 
 	Object* o;
 
-	IndependentKind kind;
+	KnownKind kind;
 
-	Independent(Object* o, Token* assosciatedToken, IndependentKind kind) : ObjectSyntaxWrapper(SyntaxWrapperTypes::INDEPENDENT, assosciatedToken) {
+	std::vector<StringLocation> locations;
+
+	Known(Object* o, KnownKind kind) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, assosciatedToken) {
 		this->o = o;
 		this->kind = kind;
+	}
+
+	void addDebugLocation(StringLocation location) {
+		locations.push_back(location);
+	}
+	void addDebugLocationsFrom(Known* from) {
+		for (StringLocation& l : from->locations) {
+			addDebugLocation(l);
+		}
 	}
 
 };
@@ -102,9 +116,11 @@ class Unknown : public ObjectSyntaxWrapper {
 public:
 
 	std::string name;
+	StringLocation location;
 
-	Unknown(std::string name, Token* assosciatedToken) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, assosciatedToken) {
+	Unknown(std::string name, StringLocation location) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, assosciatedToken) {
 		this->name = name;
+		this->location = location;
 	}
 
 };
@@ -113,12 +129,37 @@ class Dependent : public ObjectSyntaxWrapper {
 public:
 
 	Function* o;
-	std::vector<Unknown> depedencies;
-	Dependent(Function* o, Token* assosciatedToken) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, assosciatedToken) {
+	std::vector<Unknown*> depedencies;
+	std::vector<StringLocation> locations;
+	StringLocation op;
+	Dependent(Function* o, StringLocation op) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, assosciatedToken) {
 		this->o = o;
+		this->op = op;
 	}
-	void addDependecy(Unknown u) {
+	void addDependecy(Unknown* u) {
 		depedencies.push_back(u);
+	}
+	void addAllDependeciesFrom(Dependent& d) {
+		for (Unknown* u : d.depedencies) {
+			addDependecy(u);
+		}
+	}
+	size_t uknownsCount() {
+		return depedencies.size();
+	}
+	void addDebugLocation(StringLocation location) {
+		this->locations.push_back(location);
+	}
+	void addDebugLocationsFrom(Dependent* from) {
+		addDebugLocation(from->op);
+		for (StringLocation& l : from->locations) {
+			addDebugLocation(l);
+		}
+	}
+	void addDebugLocationsFrom(Known* from) {
+		for (StringLocation& l : from->locations) {
+			addDebugLocation(l);
+		}
 	}
 
 };

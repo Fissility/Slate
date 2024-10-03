@@ -1,12 +1,12 @@
 #pragma once
 
 
-struct ParseError {
+struct SlateError {
 public:
 	int id;
 	size_t begin;
 	size_t end;
-	ParseError(int id, size_t begin, size_t end) {
+	SlateError(int id, size_t begin, size_t end) {
 		this->id = id;
 		this->begin = begin;
 		this->end = end;
@@ -57,19 +57,26 @@ namespace ParseErrorCodes {
 		// Related to object forming
 
 		FLOATING_OPERATOR,
-		NOT_IN_DOMAIN
+		NOT_IN_DOMAIN,
+
+		// Runtime
+
+		RUNTIME_DOMAIN_EXCEPTION,
+		RUNTIME_TOO_FEW_ARGUMENTS
 	};
 }
 
-#define OK ParseError(ParseErrorCodes::OK,0,0)
-#define OUT_OF_PLACE(S,E) ParseError(ParseErrorCodes::OUT_OF_PLACE,S,E)
-#define EMPTY_SUBSCRIPT(S,E) ParseError(ParseErrorCodes::EMPTY_SUBSCRIPT,S,E)
-#define UNCLOSED_SUBSCRIPT(S,E) ParseError(ParseErrorCodes::UNCLOSED_SUBSCRIPT,S,E)
-#define EMPTY_FLARE(S,E) ParseError(ParseErrorCodes::EMPTY_FLARE,S,E)
-#define UNCLOSED_FLARE(S,E) ParseError(ParseErrorCodes::UNCLOSED_FLARE,S,E)
-#define UNCLOSED_FRACTION(S,E) ParseError(ParseErrorCodes::UNCOSED_FRACTION,S,E)
-#define BRACKET_NOT_CLOSED(S,E) ParseError(ParseErrorCodes::BRACKET_NOT_CLOSED,S,E)
-#define BRACKET_NOT_OPENED(S,E) ParseError(ParseErrorCodes::BRACKET_NOT_OPENED,S,E)
-#define OPERATOR_NOT_DEFINED(S,E) ParseError(ParseErrorCodes::OPERATOR_NOT_DEFINED,S,E)
-#define FLOATING_OPERATOR(S,E) ParseError(ParseErrorCodes::FLOATING_OPERATOR,S,E)
-#define DOMAIN_EXCEPTION(S,E) ParseError(ParseErrorCodes::NOT_IN_DOMAIN,S,E)
+#define OK SlateError(ParseErrorCodes::OK,0,0)
+#define OUT_OF_PLACE(S,E) SlateError(ParseErrorCodes::OUT_OF_PLACE,S,E)
+#define EMPTY_SUBSCRIPT(S,E) SlateError(ParseErrorCodes::EMPTY_SUBSCRIPT,S,E)
+#define UNCLOSED_SUBSCRIPT(S,E) SlateError(ParseErrorCodes::UNCLOSED_SUBSCRIPT,S,E)
+#define EMPTY_FLARE(S,E) SlateError(ParseErrorCodes::EMPTY_FLARE,S,E)
+#define UNCLOSED_FLARE(S,E) SlateError(ParseErrorCodes::UNCLOSED_FLARE,S,E)
+#define UNCLOSED_FRACTION(S,E) SlateError(ParseErrorCodes::UNCOSED_FRACTION,S,E)
+#define BRACKET_NOT_CLOSED(S,E) SlateError(ParseErrorCodes::BRACKET_NOT_CLOSED,S,E)
+#define BRACKET_NOT_OPENED(S,E) SlateError(ParseErrorCodes::BRACKET_NOT_OPENED,S,E)
+#define OPERATOR_NOT_DEFINED(S,E) SlateError(ParseErrorCodes::OPERATOR_NOT_DEFINED,S,E)
+#define FLOATING_OPERATOR(S,E) SlateError(ParseErrorCodes::FLOATING_OPERATOR,S,E)
+#define DOMAIN_EXCEPTION(S,E) SlateError(ParseErrorCodes::NOT_IN_DOMAIN,S,E)
+
+#define RUNTIME_DOMAIN_EXCEPTION (S,E) SlateError(ParseErrorCodes::RUNTIME_DOMAIN_EXCEPTION,S,E)

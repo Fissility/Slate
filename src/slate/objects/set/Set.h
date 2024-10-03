@@ -70,6 +70,7 @@ public:
 					Object* o2 = t->get(1);
 					return in(o1) && other->in(o2);
 				}
+
 				// For fully unwrapped common usage, (e.g. R^2xR gives ((a,b),c), but mostly used as (a,b,c))
 				else if (t->length > 2) {
 					for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
