@@ -2,6 +2,7 @@
 
 #include "../Object.h"
 #include "../set/Set.h"
+#include "Form.h"
 
 #include <functional>
 
@@ -17,8 +18,11 @@ public:
 	Set* codomain;
 
 	std::function<Object* (Object*)> mapping;
+	std::function<Function* (InputForm,Object*[])> inverseBuilder;
+
 
 	bool implemented = false;
+	bool hasInverse = false;
 
 
 	Function(Set* domain, Set* codomain, std::function<Object* (Object*)> mapping) {
@@ -38,6 +42,16 @@ public:
 
 	Object* evaluate(Object* o) {
 		return mapping(o);
+	}
+
+	void addInverse(std::function<Function* (InputForm,Object*[])> iB) {
+		inverseBuilder = iB;
+		hasInverse = true;
+	}
+
+	Function* inverse(InputForm form,Object* constants[]) {
+		if (!hasInverse) return nullptr;
+		return inverseBuilder(form,constants);
 	}
 
 };

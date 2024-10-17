@@ -10,20 +10,26 @@ enum Types {
 	FUNCTION,
 	BINARY_OPERATOR,
 	TUPLE,
-	CATEGORY
+	CATEGORY,
+	EXPRESSION
 };
 
 typedef size_t Type;
 
-class Object {
-public:
+struct AssosciatedMemory {
 	std::vector<void*> auxiliaryMemory;
 	std::vector<void*> ownedMemeory;
+	~AssosciatedMemory() {
+		for (void* p : ownedMemeory) delete p;
+	}
+};
+
+class Object {
+public:
+	AssosciatedMemory* asoc = nullptr;
 	Type type = Types::UNKNOWN;
 
 	~Object() {
-		for (void* m : ownedMemeory) {
-			delete m;
-		}
+		delete asoc;
 	}
 };

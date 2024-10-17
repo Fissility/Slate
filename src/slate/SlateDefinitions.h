@@ -41,7 +41,6 @@ namespace SlateDefinitions {
 	extern Function* division_func;
 	extern Function* power_func;
 	extern Function* setCategoryBinding_func;
-	extern Function* tupleBind_func;
 
 	void load();
 

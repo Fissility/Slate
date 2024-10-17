@@ -1,5 +1,7 @@
 #pragma once
 
+#include "objects/Expression.h"
+
 typedef size_t TokenType;
 typedef size_t Operator;
 
@@ -68,10 +70,12 @@ public:
 	SyntaxWrapperType type;
 	// This is needed for error throwing so in the later stages errors can still point to a location in the initial string
 	Token* assosciatedToken;
+	size_t nestingLevel = 0;
 
-	ObjectSyntaxWrapper(SyntaxWrapperType type, Token* assosciatedToken) {
+	ObjectSyntaxWrapper(SyntaxWrapperType type, Token* assosciatedToken, size_t nestingLevel) {
 		this->type = type;
 		this->assosciatedToken = assosciatedToken;
+		this->nestingLevel = nestingLevel;
 	}
 
 };
@@ -93,20 +97,12 @@ public:
 
 	KnownKind kind;
 
-	std::vector<StringLocation> locations;
+	StringLocation location;
 
-	Known(Object* o, KnownKind kind) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, assosciatedToken) {
+	Known(Object* o, KnownKind kind, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, assosciatedToken, nestingLevel) {
 		this->o = o;
 		this->kind = kind;
-	}
-
-	void addDebugLocation(StringLocation location) {
-		locations.push_back(location);
-	}
-	void addDebugLocationsFrom(Known* from) {
-		for (StringLocation& l : from->locations) {
-			addDebugLocation(l);
-		}
+		this->location = location;
 	}
 
 };
@@ -118,7 +114,7 @@ public:
 	std::string name;
 	StringLocation location;
 
-	Unknown(std::string name, StringLocation location) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, assosciatedToken) {
+	Unknown(std::string name, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, assosciatedToken, nestingLevel) {
 		this->name = name;
 		this->location = location;
 	}
@@ -128,48 +124,34 @@ public:
 class Dependent : public ObjectSyntaxWrapper {
 public:
 
-	Function* o;
+	Expression* exp;
 	std::vector<Unknown*> depedencies;
-	std::vector<StringLocation> locations;
-	StringLocation op;
-	Dependent(Function* o, StringLocation op) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, assosciatedToken) {
-		this->o = o;
-		this->op = op;
+	StringLocation location;
+	Dependent(Expression* exp, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, assosciatedToken, nestingLevel) {
+		this->exp = exp;
+		this->location = location;
 	}
 	void addDependecy(Unknown* u) {
 		depedencies.push_back(u);
 	}
-	void addAllDependeciesFrom(Dependent& d) {
-		for (Unknown* u : d.depedencies) {
+	void addAllDependeciesFrom(Dependent* d) {
+		for (Unknown* u : d->depedencies) {
 			addDependecy(u);
 		}
 	}
 	size_t uknownsCount() {
 		return depedencies.size();
 	}
-	void addDebugLocation(StringLocation location) {
-		this->locations.push_back(location);
-	}
-	void addDebugLocationsFrom(Dependent* from) {
-		addDebugLocation(from->op);
-		for (StringLocation& l : from->locations) {
-			addDebugLocation(l);
-		}
-	}
-	void addDebugLocationsFrom(Known* from) {
-		for (StringLocation& l : from->locations) {
-			addDebugLocation(l);
-		}
-	}
 
 };
 
+// Not quite operators
 class Marker : public ObjectSyntaxWrapper {
 public:
 
 	MarkerType mType;
 
-	Marker(MarkerType mType, Token* assosciatedToken) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER, assosciatedToken) {
+	Marker(MarkerType mType, Token* assosciatedToken, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER, assosciatedToken, nestingLevel) {
 		this->mType = mType;
 	}
 

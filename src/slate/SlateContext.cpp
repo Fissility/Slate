@@ -164,7 +164,6 @@ SlateContext::SlateContext() {
 	nameMap["\\div"] = SlateDefinitions::division_func;
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
 	nameMap["\\Rightarrow"] = SlateDefinitions::setCategoryBinding_func;
-	nameMap[","] = SlateDefinitions::tupleBind_func;
 }
 
 bool SlateContext::nameExists(std::string name) {
@@ -355,7 +354,6 @@ std::string normaliseName(std::string name) {
 	return normal;
 }
 
-// TODO, implement isOperator
 bool isOperator(ObjectSyntaxWrapper* wrapper) {
 	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
 		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
@@ -384,30 +382,34 @@ bool isOperand(ObjectSyntaxWrapper* wrapper) {
 * Links names to defined objects and classified them based on their role in the expression
 */
 SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
-	for (Token token : tokens) {
+	for (size_t i = 0; i < tokens.size();i++) {
+		Token& token = tokens[i];
+		size_t nestingLevel = 0;
+		for (size_t j = i - 1; j > -1; j--) {
+			if (tokens[j].type == TokenTypes::BEGIN_SCOPE) nestingLevel++;
+			//                                             V This is needed rn, TODO: move bracket detectin upper in the chain
+			if (tokens[j].type == TokenTypes::END_SCOPE && nestingLevel != 0) nestingLevel--;
+		}
 		std::string name = normaliseName(line.substr(token.location.begin, token.location.end-token.location.begin));
 		switch (token.type) {
 			case TokenTypes::SYMBOL: {
 				if (nameExists(name)) {
 					Object* o = nameMap[name];
-					Known* k = new Known(nameMap[name], KnownKinds::OPERAND);
 
-					k->addDebugLocation(token.location);
-
-					objects.push_back(k);
+					objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location,nestingLevel));
 				}
 				else {
-					objects.push_back(new Unknown(name, token.location));
+					objects.push_back(new Unknown(name, token.location,nestingLevel));
 				}
 				break;
 			}
 			case TokenTypes::OPERATOR: {
 				if (name == "=") {
-					objects.push_back(new Marker(MarkerTypes::EQUALS, &token));
+					objects.push_back(new Marker(MarkerTypes::EQUALS, &token,nestingLevel));
 
 				}
 				else if (name == ":") {
-					objects.push_back(new Marker(MarkerTypes::COLON, &token));
+					objects.push_back(new Marker(MarkerTypes::COLON, &token,nestingLevel));
 					break;
 				}
 				else if (nameExists(name)) {
@@ -418,11 +420,8 @@ SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>
 					else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
 					else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
 
-					Known* k = new Known(nameMap[name], kind);
 
-					k->addDebugLocation(token.location);
-
-					objects.push_back(new Known(nameMap[name], kind));
+					objects.push_back(new Known(nameMap[name], kind, token.location,nestingLevel));
 				}
 				else return OPERATOR_NOT_DEFINED(token.location.begin, token.location.end);
 				break;
@@ -443,11 +442,11 @@ SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>
 					}
 				}
 
-				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, &token));
+				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, &token,nestingLevel));
 				break;
 			}
 			case TokenTypes::END_SCOPE: {
-				objects.push_back(new Marker(MarkerTypes::END_SCOPE, &token));
+				objects.push_back(new Marker(MarkerTypes::END_SCOPE, &token, nestingLevel));
 				break;
 			}
 
@@ -491,7 +490,7 @@ SlateError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector
 				!empty(operators) &&
 				isOperator(operators.back()) &&
 				precedence(object) <= precedence(operators.back())
-			) {
+				) {
 
 				output.push_back(operators.back());
 				operators.pop_back();
@@ -531,67 +530,153 @@ SlateError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector
 	return OK;
 }
 
-// (x*4+y)*z
-// f(x) = *(4,x)
-// 
+// TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
 
-Dependent* kod(Known* k, Known* op, Dependent* d) {
-	size_t ukn = d->uknownsCount();
+Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel) {
+	bool firstTuple = o1->type == Types::TUPLE && nestingLevel1 >= currentLevel;
+	bool secondTuple = o2->type == Types::TUPLE && nestingLevel2 >= currentLevel;
+	size_t size = 0;
+	if (firstTuple) size += ((Tuple*)o1)->length;
+	else size++;
+	if (secondTuple) size += ((Tuple*)o2)->length;
+	else size++;
+	Object** arr = new Object * [size];
+	Tuple* t = new Tuple(size, arr);
+	size_t index = 0;
+	if (firstTuple) {
+		Tuple* tOther = (Tuple*)o1;
+		for (size_t i = 0; i < tOther->length; i++) {
+			arr[index++] = (*tOther)[i];
+		}
+	}
+	else arr[index++] = o1;
+	if (secondTuple) {
+		Tuple* tOther = (Tuple*)o1;
+		for (size_t i = 0; i < tOther->length; i++) {
+			arr[index++] = (*tOther)[i];
+		}
+	}
+}
 
-	Object* o_k = k->o;
-	BinaryOperator* o_op = (BinaryOperator*)op->o;
-	Function* f_d = d->o;
+Known* join_kk(Known* k1, Known* k2, size_t commaLevel) {
+	return new Known(
+		join(k1->o, k2->o, k1->nestingLevel, k2->nestingLevel, commaLevel),
+		KnownKinds::OPERAND,
+		{k1->location.begin,k2->location.end},
+		commaLevel
+	);
+}
 
-	Tuple* holder = new Tuple(2);
-	(*holder)[0] = o_k;
-	Function* wrapper = new Function(f_d->domain, f_d->codomain, [=](Object* o) {
-		(*holder)[1] = f_d->evaluate(o);
-		// TYPE CHECK FOR o_op
-		return o_op->evaluate(holder);
+Dependent* join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
+	size_t nestingLevelU1 = u1->nestingLevel;
+	size_t nestingLevelU2 = u2->nestingLevel;
+	Expression* exp = new Expression(1, [=](Object* o[]) {
+		return join(o[0], o[1], nestingLevelU1, nestingLevelU2, commaLevel);
 	});
-	wrapper->ownedMemeory.push_back(holder);
-
-	Dependent* newd = new Dependent(wrapper, op->locations[0]);
-
-	newd->addDebugLocationsFrom(k);
-	newd->addDebugLocationsFrom(d);
-
-	return newd;
+	Dependent* dep = new Dependent(exp, { u1->location.begin,u2->location.end }, commaLevel);
+	dep->addDependecy(u1);
+	dep->addDependecy(u2);
+	return dep;
 }
 
-Dependent* dok(Dependent* d, Known* op, Known* k) {
+Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
+	size_t nestingLevelD1 = d1->nestingLevel;
+	size_t nestingLevelD2 = d2->nestingLevel;
 
-	Object* o_k = k->o;
-	BinaryOperator* o_op = (BinaryOperator*)op->o;
-	Function* f_d = d->o;
+	size_t unknownsCountD1 = d1->uknownsCount();
+	size_t unknownsCountD2 = d2->uknownsCount();
 
-	Tuple* holder = new Tuple(2);
-	(*holder)[0] = o_k;
-	Function* wrapper = new Function(f_d->domain, o_op->codomain, [=](Object* o) {
-		(*holder)[1] = f_d->evaluate(o);
-		// TYPE CHECK FOR o_op
-		return o_op->evaluate(holder);
+	Expression* expD1 = d1->exp;
+	Expression* expD2 = d2->exp;
+	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, [=](Object* o[]) {
+		return join(expD1->evalFunc(&o[0]), expD2->evalFunc(&o[unknownsCountD1]), nestingLevelD1, nestingLevelD2, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { d1->location.begin,d2->location.end }, commaLevel);
+	dep->addAllDependeciesFrom(d1);
+	dep->addAllDependeciesFrom(d2);
+	return dep;
+
+}
+
+Dependent* join_uk(Unknown* u, Known* k, size_t commaLevel) {
+	size_t nestingLevelU = u->nestingLevel;
+	size_t nestingLevelK = k->nestingLevel;
+	Object* ko = k->o;
+	Expression* exp = new Expression(1, [=](Object* o[]) {
+		return join(o[0], ko, nestingLevelU, nestingLevelK, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { u->location.begin,k->location.end }, commaLevel);
+	dep->addDependecy(u);
+	return dep;
+}
+
+Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
+	size_t nestingLevelU = u->nestingLevel;
+	size_t nestingLevelK = k->nestingLevel;
+	Object* ko = k->o;
+	Expression* exp = new Expression(1, [=](Object* o[]) {
+		return join(ko, o[0], nestingLevelU, nestingLevelK, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { k->location.begin,u->location.end }, commaLevel);
+	dep->addDependecy(u);
+	return dep;
+}
+
+Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
+	size_t nestingLevelU = u->nestingLevel;
+	size_t nestingLevelD = d->nestingLevel;
+	Expression* expD = d->exp;
+	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
+		return join(o[0], expD->evalFunc(&o[1]), nestingLevelU, nestingLevelD, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
+	dep->addDependecy(u);
+	dep->addAllDependeciesFrom(d);
+	return dep;
+}
+
+Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
+	size_t nestingLevelU = u->nestingLevel;
+	size_t nestingLevelD = d->nestingLevel;
+	size_t dUnknownsCount = d->uknownsCount();
+	Expression* expD = d->exp;
+	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
+		return join(expD->evalFunc(&o[0]),o[dUnknownsCount], nestingLevelU, nestingLevelD, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
+	dep->addAllDependeciesFrom(d);
+	dep->addDependecy(u);
+	return dep;
+}
+
+Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
+	size_t nestingLevelK = k->nestingLevel;
+	size_t nestingLevelD = d->nestingLevel;
+	size_t dUnknownsCount = d->uknownsCount();
+	Object* ko = k->o;
+	Expression* expD = d->exp;
+	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
+		return join(expD->evalFunc(o), ko, nestingLevelK, nestingLevelD, commaLevel);
+	});
+	Dependent* dep = new Dependent(exp, { d->location.begin,k->location.end }, commaLevel);
+	dep->addAllDependeciesFrom(d);
+	return dep;
+}
+
+Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
+	size_t nestingLevelK = k->nestingLevel;
+	size_t nestingLevelD = d->nestingLevel;
+	size_t dUnknownsCount = d->uknownsCount();
+	Object* ko = k->o;
+	Expression* expD = d->exp;
+	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
+		return join(ko, expD->evalFunc(o), nestingLevelK, nestingLevelD, commaLevel);
 		});
-	wrapper->ownedMemeory.push_back(holder);
-
-	Dependent* newd = new Dependent(wrapper, op->locations[0]);
-
-	newd->addDebugLocationsFrom(k);
-	newd->addDebugLocationsFrom(d);
-
-	return newd;
+	Dependent* dep = new Dependent(exp, { k->location.begin,d->location.end }, commaLevel);
+	dep->addAllDependeciesFrom(d);
+	return dep;
 }
 
-Dependent* dod(Dependent* dl, Known* op, Dependent* dr) {
-	size_t unknownsCountl = dl->uknownsCount();
-	size_t unknownsCountr = dr->uknownsCount();
-	size_t totalUnknowns = unknownsCountl + unknownsCountr;
-
-	// D(x,y)
-
-	Tuple* holder = new Tuple(totalUnknowns);
-	Function* wrapper = new Function();
-}
 
 SlateError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 	// TODO: function composition function
@@ -612,27 +697,6 @@ SlateError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 					SyntaxWrapperType t1 = wrappers[i - 1]->type;
 					SyntaxWrapperType t2 = wrappers[i - 2]->type;
 
-					if (t1 == SyntaxWrapperTypes::KNOWN && t2 == SyntaxWrapperTypes::KNOWN) {
-						Known* i1 = (Known*)t1;
-
-						Known* i2 = (Known*)t2;
-						if (i1->kind != KnownKinds::OPERAND || i2->kind != KnownKinds::OPERAND) return FLOATING_OPERATOR(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
-						BinaryOperator* bo = (BinaryOperator*)iow->o;
-						Tuple t(2, new Object * [] {i1->o,i2->o});
-						if (!bo->domain->in(&t)) return DOMAIN_EXCEPTION(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
-						Object* result = bo->evaluate(&t);
-
-						delete wrappers[i];
-						delete wrappers[i - 1];
-						delete wrappers[i - 2];
-						Known* k = new Known(result,KnownKinds::OPERAND);
-						k->addDebugLocationsFrom(i1);
-						k->addDebugLocationsFrom(i2);
-						wrappers[i] = k;
-						wrappers.erase(wrappers.begin() + i - 2);
-						wrappers.erase(wrappers.begin() + i - 2);
-						i = i - 2;
-					}
 				}
 			}
 		}

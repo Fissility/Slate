@@ -2,7 +2,6 @@
 
 #include "../../SlateType.h"
 #include "../Object.h"
-
 class Number : public Object {
 
 public:
