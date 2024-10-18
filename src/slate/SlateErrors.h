@@ -80,3 +80,17 @@ namespace ParseErrorCodes {
 #define DOMAIN_EXCEPTION(S,E) SlateError(ParseErrorCodes::NOT_IN_DOMAIN,S,E)
 
 #define RUNTIME_DOMAIN_EXCEPTION (S,E) SlateError(ParseErrorCodes::RUNTIME_DOMAIN_EXCEPTION,S,E)
+
+class RuntimeDomainException : public std::exception {
+public:
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class RuntimeNoInverse : public std::exception {
+public:
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};

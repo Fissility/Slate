@@ -24,6 +24,7 @@ struct AssosciatedMemory {
 	}
 };
 
+// Base class for all mathematical objects
 class Object {
 public:
 	AssosciatedMemory* asoc = nullptr;

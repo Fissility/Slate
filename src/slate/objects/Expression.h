@@ -13,12 +13,20 @@ class Expression : public Object {
 public:
 
 	size_t numberOfVariables;
-	std::function<Object* (Object*[])> evalFunc;
+	std::function<Object* (Object**)> evalFunc;
 
-	Expression(size_t numberOfVariables, std::function<Object* (Object*[])> evalFunc) {
+	bool hasInverse = false;
+	std::function<void(Object*, Object*[])> reverseFunc;
+
+	Expression(size_t numberOfVariables, std::function<Object* (Object**)> evalFunc) {
 		this->type = Types::EXPRESSION;
 		this->numberOfVariables = numberOfVariables;
 		this->evalFunc = evalFunc;
+	}
+
+	void setInverse(std::function<void(Object*, Object*[])> reverseFunc) {
+		this->reverseFunc = reverseFunc;
+		hasInverse = true;
 	}
 
 };

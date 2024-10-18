@@ -8,6 +8,10 @@
 
 // ======================================================
 
+/*
+* @param c Input charracter
+* @return Retruns TRUE if c is a char between a and z or A and Z
+*/
 bool isAtoB(char c) {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
 }
@@ -15,7 +19,11 @@ bool isAtoB(char c) {
 bool isSpecialCharacters(std::string s) {
 	return std::find(SlateDefinitions::specialCharacters.begin(), SlateDefinitions::specialCharacters.end(), s) != SlateDefinitions::specialCharacters.end();
 }
-
+/*
+* @param s The string in which it should be searched
+* @param i The current position index inside the string
+* @return Returns the control sequence present at a specific position in the string, if none is there it returns an empty string
+*/
 std::string getNextTeX(std::string& s, size_t& i) {
 	if (s[i] != '\\') return "";
 	std::string name = "\\";
@@ -35,28 +43,52 @@ std::string getNextTeX(std::string& s, size_t& i) {
 	return name;
 }
 
+/*
+* @brief Advances the string index up to the next character that is not whitespace
+* @param s The string in which it should skipped
+* @param i The current index position in the string
+*/
 void skipWhiteSpaces(std::string& s, size_t& i) {
 	while (s[i] == ' ' && i < s.size()) i++;
 }
 
+/*
+* @brief Subtracts the string index down to the next character that is not whitespace
+* @param s The string in which it should skipped
+* @param i The current index position in the string
+*/
 void skipBackWhiteSpaces(std::string& s, size_t& i) {
 	if (i > 0 && s[i - 1] == ' ') {
 		while (i > 0 && s[i] == ' ') i--;
 	}
 }
 
+/*
+* @return Returns TRUE if the TeX symbol can be the base of a character
+*/
 bool isSymbolBase(std::string s) {
 	return std::find(SlateDefinitions::symbolBases.begin(), SlateDefinitions::symbolBases.end(), s) != SlateDefinitions::symbolBases.end();
 }
 
+/*
+* @return Returns TRUE if the TeX symbol can be the flare of a character
+*/
 bool isSymbolFlare(std::string s) {
 	return std::find(SlateDefinitions::symbolFlares.begin(), SlateDefinitions::symbolFlares.end(), s) != SlateDefinitions::symbolFlares.end();
 }
 
+/*
+* @return Returns TRUE if the TeX symbol is possible binary operator
+*/
 bool isBinaryOperator(std::string s) {
 	return std::find(SlateDefinitions::binaryOperators.begin(), SlateDefinitions::binaryOperators.end(), s) != SlateDefinitions::binaryOperators.end();
 }
 
+/*
+* @param s The string in which the next term should be searched in
+* @param index The index position inside the string
+* @return Returns and advances to the next syntactically indivisble structure in the string. Either a character or a control sequence. 
+*/
 size_t jump(std::string& s, size_t& index) {
 	skipWhiteSpaces(s, index);
 	size_t begin = index;
@@ -70,6 +102,11 @@ size_t jump(std::string& s, size_t& index) {
 	return begin;
 }
 
+/*
+* @param s The string in which the next term should be searched in
+* @param index The index position inside the string
+* @return Returns and does NOT advance to the next syntactically indivisble structure in the string. Either a character or a control sequence.
+*/
 std::string peek(std::string& s, size_t index) {
 	skipWhiteSpaces(s, index);
 	if (index >= s.size()) return "";
@@ -107,14 +144,26 @@ bool iterateOverBrackets(std::string& line, size_t& start) {
 }
 
 // gotta love TeX
+/*
+* @brief Advances the index from the start to the end of a subscript
+* @param line The string which contains the subscript
+* @param i The current position index inside the string
+* @param begin The position at which the original syntactical object has started to be lexed
+*/
 SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
+	// If the end is reached then the subscript is empty
 	if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin,i);
+	// Check if the subscript is done using enclosing brackets
+	// In which case going to the end is easy as it just needs to iterate
+	// up until the closing bracket is reached
 	if (peek(line, i) == "{") {
 		begin = jump(line, i);
 		if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
 		if (peek(line, i) == "}") return EMPTY_SUBSCRIPT(begin, i);
 		if (!iterateOverBrackets(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
 	}
+	// Check if the subscript is done using [...]_\left([...]\right)
+	// Does not also check if there is a bracket after it as that would not be valid TeX
 	else if (peek(line, i) == "\\left") {
 		begin = jump(line, i);
 		bool passedRight = false;
@@ -129,6 +178,7 @@ SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
 			begin = jump(line, i);
 		}
 	}
+	// The remaining option is that the object at the subscripit is directly the object
 	else {
 		if (isSymbolFlare(peek(line, i))) {
 			begin = jump(line, i);
@@ -165,6 +215,7 @@ SlateContext::SlateContext() {
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
 	nameMap["\\Rightarrow"] = SlateDefinitions::setCategoryBinding_func;
 }
+
 
 bool SlateContext::nameExists(std::string name) {
 	return nameMap.find(name) != nameMap.end();
@@ -573,6 +624,10 @@ Dependent* join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
 	Expression* exp = new Expression(1, [=](Object* o[]) {
 		return join(o[0], o[1], nestingLevelU1, nestingLevelU2, commaLevel);
 	});
+	exp->setInverse([=](Object* o,Object* r[]) {
+		r[0] = (*(Tuple*)o)[0];
+		r[1] = (*(Tuple*)o)[1];
+	});
 	Dependent* dep = new Dependent(exp, { u1->location.begin,u2->location.end }, commaLevel);
 	dep->addDependecy(u1);
 	dep->addDependecy(u2);
@@ -591,6 +646,16 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, [=](Object* o[]) {
 		return join(expD1->evalFunc(&o[0]), expD2->evalFunc(&o[unknownsCountD1]), nestingLevelD1, nestingLevelD2, commaLevel);
 	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		Tuple* t = (Tuple*)o;
+		if (!expD1->hasInverse) throw RuntimeNoInverse();
+		if (!expD2->hasInverse) throw RuntimeNoInverse();
+		// TODO: pretty sure this not correct in general so fix this later, will work for most cases
+		Tuple t1(t->length - 1, &(*t)[0]);
+		Tuple t2(1, &(*t)[t->length-1]);
+		expD1->reverseFunc(&t1, &r[0]);
+		expD2->reverseFunc(&t2, &r[unknownsCountD1]);
+	});
 	Dependent* dep = new Dependent(exp, { d1->location.begin,d2->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d1);
 	dep->addAllDependeciesFrom(d2);
@@ -605,6 +670,9 @@ Dependent* join_uk(Unknown* u, Known* k, size_t commaLevel) {
 	Expression* exp = new Expression(1, [=](Object* o[]) {
 		return join(o[0], ko, nestingLevelU, nestingLevelK, commaLevel);
 	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		r[0] = (*(Tuple*)o)[0];
+	});
 	Dependent* dep = new Dependent(exp, { u->location.begin,k->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
@@ -617,6 +685,9 @@ Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
 	Expression* exp = new Expression(1, [=](Object* o[]) {
 		return join(ko, o[0], nestingLevelU, nestingLevelK, commaLevel);
 	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		r[0] = (*(Tuple*)o)[1];
+	});
 	Dependent* dep = new Dependent(exp, { k->location.begin,u->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
@@ -628,6 +699,13 @@ Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
 		return join(o[0], expD->evalFunc(&o[1]), nestingLevelU, nestingLevelD, commaLevel);
+	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		Tuple* t = (Tuple*)o;
+		if (!expD->hasInverse) throw RuntimeNoInverse();
+		Tuple t1(t->length - 1, &(*t)[1]);
+		r[0] = (*t)[0];
+		expD->reverseFunc(&t1, &r[1]);
 	});
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addDependecy(u);
@@ -643,9 +721,36 @@ Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(&o[0]),o[dUnknownsCount], nestingLevelU, nestingLevelD, commaLevel);
 	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		Tuple* t = (Tuple*)o;
+		if (!expD->hasInverse) throw RuntimeNoInverse();
+		Tuple t1(t->length - 1, &(*t)[0]);
+		r[dUnknownsCount] = (*t)[t->length-1];
+		expD->reverseFunc(&t1, &r[0]);
+	});
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 	dep->addDependecy(u);
+	return dep;
+}
+
+Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
+	size_t nestingLevelK = k->nestingLevel;
+	size_t nestingLevelD = d->nestingLevel;
+	size_t dUnknownsCount = d->uknownsCount();
+	Object* ko = k->o;
+	Expression* expD = d->exp;
+	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
+		return join(ko, expD->evalFunc(o), nestingLevelK, nestingLevelD, commaLevel);
+	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		Tuple* t = (Tuple*)o;
+		if (!expD->hasInverse) throw RuntimeNoInverse();
+		Tuple t1(t->length - 1, &(*t)[1]);
+		expD->reverseFunc(&t1, &r[0]);
+	});
+	Dependent* dep = new Dependent(exp, { k->location.begin,d->location.end }, commaLevel);
+	dep->addAllDependeciesFrom(d);
 	return dep;
 }
 
@@ -658,21 +763,14 @@ Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
 	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(o), ko, nestingLevelK, nestingLevelD, commaLevel);
 	});
+	exp->setInverse([=](Object* o, Object* r[]) {
+		Tuple* t = (Tuple*)o;
+		if (!expD->hasInverse) throw RuntimeNoInverse();
+		// TODO: pretty sure this not correct in general so fix this later, will work for most cases
+		Tuple t1(t->length - 1, &(*t)[0]);
+		expD->reverseFunc(&t1, &r[0]);
+	});
 	Dependent* dep = new Dependent(exp, { d->location.begin,k->location.end }, commaLevel);
-	dep->addAllDependeciesFrom(d);
-	return dep;
-}
-
-Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
-	size_t nestingLevelK = k->nestingLevel;
-	size_t nestingLevelD = d->nestingLevel;
-	size_t dUnknownsCount = d->uknownsCount();
-	Object* ko = k->o;
-	Expression* expD = d->exp;
-	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
-		return join(ko, expD->evalFunc(o), nestingLevelK, nestingLevelD, commaLevel);
-		});
-	Dependent* dep = new Dependent(exp, { k->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 	return dep;
 }

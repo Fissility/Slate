@@ -58,21 +58,6 @@ void SlateDefinitions::load() {
 		return output;
 	},ADDITION);
 
-	addition_func->addInverse([](InputForm iF,Object* constants[]) {
-		if (iF.type != InputFormTypes::MULTIPLE) return (Function*)nullptr;
-		if (iF.otherForms->size() != 2) return (Function*)nullptr;
-		InputForm& i1 = (*iF.otherForms)[0];
-		InputForm& i2 = (*iF.otherForms)[1];
-		if (i1.type == InputFormTypes::MULTIPLE || i2.type == InputFormTypes::MULTIPLE) return (Function*)nullptr;
-		if (i1.type == InputFormTypes::INPUT && i2.type == InputFormTypes::INPUT) return (Function*)nullptr;
-		Object* c = constants[0];
-		return new Function(addition_func->codomain, addition_func->domain, [=](Object * o) {
-			static Number* output = new Number(0);
-			output->value = (Number*)o - (Number*)c;
-			return output;
-		});
-	});
-
 	subtraction_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
