@@ -1,18 +1,5 @@
 #pragma once
 
-
-struct SlateError {
-public:
-	int id;
-	size_t begin;
-	size_t end;
-	SlateError(int id, size_t begin, size_t end) {
-		this->id = id;
-		this->begin = begin;
-		this->end = end;
-	}
-};
-
 // Lexer
 /*
 #define OUT_OF_PLACE(S,E) {-1, std::format("Out of place symbol at {}",S),S,E}
@@ -22,74 +9,147 @@ public:
 #define UNCLOSED_FLARE(S,E) {-5, std::format("Unclosed flare at {}",S),S,E}
 #define UNCLOSED_FRACTION(S,E) {-6, std::format("Unclosed fraction at {}",S),S,E}
 
-// Parser
-
 #define BRACKET_NOT_CLOSED(S,E) {-6, std::format("Bracket at {} was not closed",i),S),S,E}
 #define BRACKET_NOT_OPENED(S,E) {-7, std::format("Bracket at {} was nenver opened",S),S,E}
 #define OPERATOR_NOT_DEFINED(S,E) {-8, std::format("Operator at {} was never defined",E),S,E}
 #define FLOATING_OPERATOR(NAME,S,E) {-9, std::format("Operator {} doesn't have elements on both sides",NAME),S,E}
 #define DOMAIN_EXCEPTION(NAME,S,E) {-9 , std::format("The domain on which {} is defined does not support the attempted operation",NAME),S,E}*/
 
-// Lexer
-
-namespace ParseErrorCodes {
-	enum ParseErrorCodes {
-		OK, // This is the good one, the rest are evil
-
-		// Related to the Lexer
-
-		OUT_OF_PLACE,
-		EMPTY_SUBSCRIPT,
-		UNCLOSED_SUBSCRIPT,
-		EMPTY_FLARE,
-		UNCLOSED_FLARE,
-		UNCOSED_FRACTION,
-
-		// Related to object linking
-
-		OPERATOR_NOT_DEFINED,
-
-		// Related to shuting yard step
-
-		BRACKET_NOT_CLOSED,
-		BRACKET_NOT_OPENED,
-
-		// Related to object forming
-
-		FLOATING_OPERATOR,
-		NOT_IN_DOMAIN,
-
-		// Runtime
-
-		RUNTIME_DOMAIN_EXCEPTION,
-		RUNTIME_TOO_FEW_ARGUMENTS
-	};
-}
-
-#define OK SlateError(ParseErrorCodes::OK,0,0)
-#define OUT_OF_PLACE(S,E) SlateError(ParseErrorCodes::OUT_OF_PLACE,S,E)
-#define EMPTY_SUBSCRIPT(S,E) SlateError(ParseErrorCodes::EMPTY_SUBSCRIPT,S,E)
-#define UNCLOSED_SUBSCRIPT(S,E) SlateError(ParseErrorCodes::UNCLOSED_SUBSCRIPT,S,E)
-#define EMPTY_FLARE(S,E) SlateError(ParseErrorCodes::EMPTY_FLARE,S,E)
-#define UNCLOSED_FLARE(S,E) SlateError(ParseErrorCodes::UNCLOSED_FLARE,S,E)
-#define UNCLOSED_FRACTION(S,E) SlateError(ParseErrorCodes::UNCOSED_FRACTION,S,E)
-#define BRACKET_NOT_CLOSED(S,E) SlateError(ParseErrorCodes::BRACKET_NOT_CLOSED,S,E)
-#define BRACKET_NOT_OPENED(S,E) SlateError(ParseErrorCodes::BRACKET_NOT_OPENED,S,E)
-#define OPERATOR_NOT_DEFINED(S,E) SlateError(ParseErrorCodes::OPERATOR_NOT_DEFINED,S,E)
-#define FLOATING_OPERATOR(S,E) SlateError(ParseErrorCodes::FLOATING_OPERATOR,S,E)
-#define DOMAIN_EXCEPTION(S,E) SlateError(ParseErrorCodes::NOT_IN_DOMAIN,S,E)
-
-#define RUNTIME_DOMAIN_EXCEPTION (S,E) SlateError(ParseErrorCodes::RUNTIME_DOMAIN_EXCEPTION,S,E)
-
-class RuntimeDomainException : public std::exception {
+class SlateError : public std::exception {
 public:
+	size_t locationBegin;
+	size_t locationEnd;
+	SlateError(size_t b, size_t e) {
+		locationBegin = b;
+		locationEnd = e;
+	}
+};
+
+class CompileOutOfPlace : public SlateError {
+public:
+
+	CompileOutOfPlace(size_t b, size_t e):SlateError(b,e) {}
+
 	const char* what() const override {
 		return "TODO:write decp";
 	}
 };
 
-class RuntimeNoInverse : public std::exception {
+class CompileEmptySubscript : public SlateError {
 public:
+
+	CompileEmptySubscript(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileUnclosedSubscript : public SlateError {
+public:
+
+	CompileUnclosedSubscript(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileEmptyFlare : public SlateError {
+public:
+
+	CompileEmptyFlare(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileUnclosedFlare : public SlateError {
+public:
+
+	CompileUnclosedFlare(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileUnclosedFraction : public SlateError {
+public:
+
+	CompileUnclosedFraction(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileBracketNotClosed : public SlateError {
+public:
+
+	CompileBracketNotClosed(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileBracketNotOpened : public SlateError {
+public:
+
+	CompileBracketNotOpened(size_t b, size_t e) :SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileOperatorNotDefinied : public SlateError {
+public:
+
+	CompileOperatorNotDefinied(size_t b, size_t e) : SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileFloatingOperator : public SlateError {
+public:
+
+	CompileFloatingOperator(size_t b, size_t e) : SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class CompileDomainException : public SlateError {
+public:
+
+	CompileDomainException(size_t b, size_t e) : SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class RuntimeDomainException : public SlateError {
+public:
+
+	RuntimeDomainException(size_t b, size_t e) : SlateError(b, e) {}
+
+	const char* what() const override {
+		return "TODO:write decp";
+	}
+};
+
+class RuntimeNoInverse : public SlateError {
+public:
+
+	RuntimeNoInverse(size_t b, size_t e) : SlateError(b, e) {}
+
 	const char* what() const override {
 		return "TODO:write decp";
 	}

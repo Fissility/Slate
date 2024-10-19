@@ -150,17 +150,17 @@ bool iterateOverBrackets(std::string& line, size_t& start) {
 * @param i The current position index inside the string
 * @param begin The position at which the original syntactical object has started to be lexed
 */
-SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
+void processSubscript(std::string& line, size_t& i, size_t begin) {
 	// If the end is reached then the subscript is empty
-	if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin,i);
+	if (isEnd(line, i)) throw CompileEmptySubscript(begin, i);
 	// Check if the subscript is done using enclosing brackets
 	// In which case going to the end is easy as it just needs to iterate
 	// up until the closing bracket is reached
 	if (peek(line, i) == "{") {
 		begin = jump(line, i);
-		if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
-		if (peek(line, i) == "}") return EMPTY_SUBSCRIPT(begin, i);
-		if (!iterateOverBrackets(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
+		if (isEnd(line, i)) throw CompileUnclosedSubscript(begin, i);
+		if (peek(line, i) == "}") throw CompileEmptySubscript(begin, i);
+		if (!iterateOverBrackets(line, i)) throw CompileUnclosedSubscript(begin, i);
 	}
 	// Check if the subscript is done using [...]_\left([...]\right)
 	// Does not also check if there is a bracket after it as that would not be valid TeX
@@ -169,10 +169,10 @@ SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
 		bool passedRight = false;
 		bool finished = false;
 		while (!finished) {
-			if (isEnd(line, i)) return UNCLOSED_SUBSCRIPT(begin, i);
+			if (isEnd(line, i)) throw CompileUnclosedSubscript(begin, i);
 			if (passedRight) {
 				if (peek(line, i) == ")") finished = true;
-				else return OUT_OF_PLACE(begin, i);
+				else throw CompileOutOfPlace(begin, i);
 			}
 			if (peek(line, i) == "\\right") passedRight = true;
 			begin = jump(line, i);
@@ -182,24 +182,23 @@ SlateError processSubscript(std::string& line, size_t& i, size_t begin) {
 	else {
 		if (isSymbolFlare(peek(line, i))) {
 			begin = jump(line, i);
-			if (isEnd(line, i)) return EMPTY_FLARE(begin, i);
+			if (isEnd(line, i)) throw CompileEmptyFlare(begin, i);
 			if (peek(line, i) == "{") {
 				begin = jump(line, i);
-				if (isEnd(line, i)) return UNCLOSED_FLARE(begin, i);
-				if (peek(line, i) == "}") return EMPTY_FLARE(begin, i);
-				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE(begin, i);
+				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, i);
+				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, i);
+				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, i);
 			}
 			else {
-				if (isEnd(line, i)) return EMPTY_FLARE(begin, i);
+				if (isEnd(line, i)) throw CompileEmptyFlare(begin, i);
 				begin = jump(line, i);
 			}
 		}
 		else {
-			if (isEnd(line, i)) return EMPTY_SUBSCRIPT(begin, i);
+			if (isEnd(line, i)) throw CompileEmptySubscript(begin, i);
 			jump(line, i);
 		}
 	}
-	return OK;
 }
 
 // ======================================================
@@ -232,27 +231,20 @@ void SlateContext::processSyntax() {
 	}
 }
 
-SlateError SlateContext::processSyntaxLine(std::string& line) {
-
-	SlateError err = OK;
+void SlateContext::processSyntaxLine(std::string& line) {
 
 	std::vector<Token> tokens;
-	err = lexer(line, tokens);
-	if (err.id != 0) return err;
+	lexer(line, tokens);
 
 	std::vector<ObjectSyntaxWrapper*> wrappers;
-	err = linkTokensToObjects(line, tokens, wrappers);
-	if (err.id != 0) return err;
+	linkTokensToObjects(line, tokens, wrappers);
 
 	std::vector<ObjectSyntaxWrapper*> syOut;
-	err = shuntingYard(wrappers, syOut);
-	if (err.id != 0) return err;
-
-	return OK;
+	shuntingYard(wrappers, syOut);
 
 }
 
-SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
+void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t begin = 0;
 	size_t end = 0;
 	size_t i = 0;
@@ -270,7 +262,7 @@ SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == "}") {
 			if (flags[LexerFlags::FRACTION_OPEN_TOP]) {
 				begin = jump(line, i);
-				if (isEnd(line, i)) return UNCLOSED_FRACTION(begin,end);
+				if (isEnd(line, i)) throw CompileUnclosedFraction(begin,end);
 				if (peek(line, i) == "{") {
 					jump(line, i);
 					end = i;
@@ -278,7 +270,7 @@ SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 					flags[LexerFlags::FRACTION_OPEN_TOP] = false;
 					flags[LexerFlags::FRACTION_OPEN_BOTTOM] = true;
 				}
-				else return OUT_OF_PLACE(begin, end);
+				else throw CompileOutOfPlace(begin, end);
 			}
 			else if (flags[LexerFlags::FRACTION_OPEN_BOTTOM]) {
 				begin = jump(line, i);
@@ -298,9 +290,8 @@ SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				SlateError err = processSubscript(line, i, begin);
+				processSubscript(line, i, begin);
 				end = i;
-				if (err.id != 0) return err;
 			}
 			else end = i;
 
@@ -311,26 +302,25 @@ SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		// CHECK FOR FLARE START
 		if (isSymbolFlare(current)) {
 			begin = jump(line, i);
-			if (isEnd(line, i)) return EMPTY_FLARE(begin, end);
+			if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
-				if (isEnd(line, i)) return UNCLOSED_FLARE(begin, end);
-				if (peek(line, i) == "}") return EMPTY_FLARE(begin, end);
-				if (!iterateOverBrackets(line, i)) return UNCLOSED_FLARE(begin, end);
+				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, end);
+				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, end);
+				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, end);
 				end = i;
 			}
 			else {
-				if (isEnd(line, i)) return EMPTY_FLARE(begin, end);
+				if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
 				jump(line, i);
 				end = i;
 			}
 			if (peek(line, i) == "_") {
 				jump(line, i);
 				end = i;
-				SlateError err = processSubscript(line, i, begin);
+				processSubscript(line, i, begin);
 				end = i;
-				if (err.id != 0) return err;
 			}
 			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
 			continue;
@@ -362,20 +352,19 @@ SlateError SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 
 		if (current == "\\frac") {
 			begin = jump(line, i);
-			if (isEnd(line, i)) return UNCLOSED_FRACTION(begin, end);
+			if (isEnd(line, i)) throw CompileUnclosedFraction(begin, end);
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
 				tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_FIRST, begin, end));
 				flags[LexerFlags::FRACTION_OPEN_TOP] = true;
 			}
-			else return UNCLOSED_FRACTION(begin, end);
+			else throw CompileUnclosedFraction(begin, end);
 			continue;
 		}
 
-		return OUT_OF_PLACE(begin, end);
+		throw CompileOutOfPlace(begin, end);
 	}
-	return OK;
 }
 
 std::string normaliseName(std::string name) {
@@ -432,7 +421,7 @@ bool isOperand(ObjectSyntaxWrapper* wrapper) {
 /*
 * Links names to defined objects and classified them based on their role in the expression
 */
-SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
+void SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
 	for (size_t i = 0; i < tokens.size();i++) {
 		Token& token = tokens[i];
 		size_t nestingLevel = 0;
@@ -474,7 +463,7 @@ SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>
 
 					objects.push_back(new Known(nameMap[name], kind, token.location,nestingLevel));
 				}
-				else return OPERATOR_NOT_DEFINED(token.location.begin, token.location.end);
+				else throw CompileOperatorNotDefinied(token.location.begin, token.location.end);
 				break;
 			}
 			case TokenTypes::BEGIN_SCOPE: {
@@ -503,7 +492,6 @@ SlateError SlateContext::linkTokensToObjects(std::string line,std::vector<Token>
 
 		}
 	}
-	return OK;
 }
 
 // TODO, implement precedence function
@@ -577,8 +565,6 @@ SlateError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector
 		output.push_back(operators.back());
 		operators.pop_back();
 	}
-
-	return OK;
 }
 
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
@@ -641,6 +627,9 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 	size_t unknownsCountD1 = d1->uknownsCount();
 	size_t unknownsCountD2 = d2->uknownsCount();
 
+	StringLocation locationD1 = d1->location;
+	StringLocation locationD2 = d2->location;
+
 	Expression* expD1 = d1->exp;
 	Expression* expD2 = d2->exp;
 	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, [=](Object* o[]) {
@@ -648,8 +637,8 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 	});
 	exp->setInverse([=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
-		if (!expD1->hasInverse) throw RuntimeNoInverse();
-		if (!expD2->hasInverse) throw RuntimeNoInverse();
+		if (!expD1->hasInverse) throw RuntimeNoInverse(locationD1.begin,locationD1.end);
+		if (!expD2->hasInverse) throw RuntimeNoInverse(locationD1.begin,locationD2.end);
 		// TODO: pretty sure this not correct in general so fix this later, will work for most cases
 		Tuple t1(t->length - 1, &(*t)[0]);
 		Tuple t2(1, &(*t)[t->length-1]);
@@ -695,14 +684,18 @@ Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
 
 Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
+
 	size_t nestingLevelD = d->nestingLevel;
+
+	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
 		return join(o[0], expD->evalFunc(&o[1]), nestingLevelU, nestingLevelD, commaLevel);
 	});
+
 	exp->setInverse([=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
-		if (!expD->hasInverse) throw RuntimeNoInverse();
+		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[1]);
 		r[0] = (*t)[0];
 		expD->reverseFunc(&t1, &r[1]);
@@ -717,13 +710,14 @@ Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
+	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(&o[0]),o[dUnknownsCount], nestingLevelU, nestingLevelD, commaLevel);
 	});
 	exp->setInverse([=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
-		if (!expD->hasInverse) throw RuntimeNoInverse();
+		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[0]);
 		r[dUnknownsCount] = (*t)[t->length-1];
 		expD->reverseFunc(&t1, &r[0]);
@@ -739,13 +733,14 @@ Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
 	Object* ko = k->o;
+	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
 		return join(ko, expD->evalFunc(o), nestingLevelK, nestingLevelD, commaLevel);
 	});
 	exp->setInverse([=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
-		if (!expD->hasInverse) throw RuntimeNoInverse();
+		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[1]);
 		expD->reverseFunc(&t1, &r[0]);
 	});
@@ -759,13 +754,14 @@ Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
 	Object* ko = k->o;
+	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(o), ko, nestingLevelK, nestingLevelD, commaLevel);
 	});
 	exp->setInverse([=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
-		if (!expD->hasInverse) throw RuntimeNoInverse();
+		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		// TODO: pretty sure this not correct in general so fix this later, will work for most cases
 		Tuple t1(t->length - 1, &(*t)[0]);
 		expD->reverseFunc(&t1, &r[0]);
@@ -775,8 +771,81 @@ Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
 	return dep;
 }
 
+ObjectSyntaxWrapper* joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper* right, size_t commaLevel = SIZE_MAX) {
+	if (left->type == SyntaxWrapperTypes::KNOWN) {
+		if (right->type == SyntaxWrapperTypes::KNOWN) return join_kk((Known*)left, (Known*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::UNKNOWN) return join_ku((Known*)left, (Unknown*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::DEPENDENT) return join_kd((Known*)left, (Dependent*)right, commaLevel);
+	}
+	if (left->type == SyntaxWrapperTypes::UNKNOWN) {
+		if (right->type == SyntaxWrapperTypes::KNOWN) return join_uk((Unknown*)left, (Known*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::UNKNOWN) return join_uu((Unknown*)left, (Unknown*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::DEPENDENT) return join_ud((Unknown*)left, (Dependent*)right, commaLevel);
+	}
+	if (left->type == SyntaxWrapperTypes::DEPENDENT) {
+		if (right->type == SyntaxWrapperTypes::KNOWN) return join_dk((Dependent*)left, (Known*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::UNKNOWN) return join_du((Dependent*)left, (Unknown*)right, commaLevel);
+		if (right->type == SyntaxWrapperTypes::DEPENDENT) return join_dd((Dependent*)left, (Dependent*)right, commaLevel);
+	}
+	return nullptr;
+}
 
-SlateError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
+Known* func_k(Known* func, Known* k, bool isBinary) {
+	Function* f = (Function*)func;
+	if (!f->domain->in(k->o)) throw CompileDomainException(func->location.begin, func->location.end);
+	Object* result = f->evaluate(k->o);
+
+	StringLocation location;
+
+	if (isBinary) location = { k->location.begin,k->location.end };
+	else location = { func->location.begin,k->location.end };
+
+	return new Known(result, KnownKinds::OPERAND, location, func->nestingLevel);
+}
+
+Dependent* func_u(Known* func, Unknown* u) {
+	Function* f = (Function*)func;
+
+	StringLocation functionLocation = func->location;
+
+	Expression* exp = new Expression(1, [=](Object* o[]) {
+		if (!f->domain->in(o[0])) throw RuntimeDomainException(functionLocation.begin, functionLocation.end);
+		return f->evaluate(o[0]);
+	});
+
+	Dependent* dep = new Dependent(exp, { func->location.begin,u->location.end }, func->nestingLevel);
+	dep->addDependecy(u);
+	return dep;
+
+}
+
+Dependent* func_d(Known* func, Dependent* d,bool isBinary) {
+	Function* f = (Function*)func;
+
+	StringLocation functionLocation = func->location;
+
+	Expression* expD = d->exp;
+
+	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
+		Object* result = expD->evalFunc(o);
+		if (!f->domain->in(result)) throw RuntimeDomainException(functionLocation.begin, functionLocation.end);
+		return f->evaluate(result);
+	});
+
+	StringLocation location;
+	if (isBinary) location = { d->location.begin,d->location.end };
+	else location = { func->location.begin,d->location.end };
+
+	Dependent* dep = new Dependent(exp, location, func->nestingLevel);
+	dep->addAllDependeciesFrom(d);
+	return dep;
+
+}
+
+// TODO: A way to mark defition headers
+
+
+void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 	// TODO: function composition function
 
 	bool done = false;
@@ -785,22 +854,21 @@ SlateError SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 		for (size_t i = 0; i < wrappers.size(); i++) {
 
 			ObjectSyntaxWrapper* ow = wrappers[i];
-
 			if (ow->type == SyntaxWrapperTypes::KNOWN) {
 				Known* iow = (Known*)ow;
 
 				if (iow->kind == KnownKinds::BINARY_OPERATOR) {
-					if (wrappers.size() < 2) return FLOATING_OPERATOR(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
+					if (wrappers.size() < 2) throw CompileFloatingOperator(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
 
 					SyntaxWrapperType t1 = wrappers[i - 1]->type;
 					SyntaxWrapperType t2 = wrappers[i - 2]->type;
+
+
 
 				}
 			}
 		}
 	}
-
-	return OK;
 }
 
 void SlateContext::removeExpresion(size_t index) {
