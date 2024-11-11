@@ -23,8 +23,9 @@ namespace SlateDefinitions {
 	
 	extern std::vector<std::string> symbolBases;
 	extern std::vector<std::string> symbolFlares;
-	extern std::vector<std::string> specialCharacters;
+	extern std::vector<std::string> controlSeqeuenceCharacters;
 	extern std::vector<std::string> binaryOperators;
+	extern std::unordered_map<std::string, std::string> controlSequenceFunctions;
 
 	extern AllSetsSet* AllSets_set;
 	extern Set* AllSets2_set;

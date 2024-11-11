@@ -25,8 +25,8 @@ bool is0to9(char c) {
 	return '0' <= c && c <= '9';
 }
 
-bool isSpecialCharacters(std::string s) {
-	return std::find(SlateDefinitions::specialCharacters.begin(), SlateDefinitions::specialCharacters.end(), s) != SlateDefinitions::specialCharacters.end();
+bool isControlSeqeuenceCharacter(std::string s) {
+	return std::find(SlateDefinitions::controlSeqeuenceCharacters.begin(), SlateDefinitions::controlSeqeuenceCharacters.end(), s) != SlateDefinitions::controlSeqeuenceCharacters.end();
 }
 /*
 * @param s The string in which it should be searched
@@ -37,12 +37,12 @@ std::string getNextTeX(std::string& s, size_t& i) {
 	if (s[i] != '\\') return "";
 	std::string name = "\\";
 	i++;
-	if (isSpecialCharacters(std::string(1, s[i])) && i < s.size()) {
+	if (isControlSeqeuenceCharacter(std::string(1, s[i])) && i < s.size()) {
 		name += s[i];
 		return name;
 	}
 	while (true) {
-		if (isAtoZ(s[i]) && i < s.size()) name += s[i];
+		if ((isAtoZ(s[i]) || is0to9(s[i])) && i < s.size()) name += s[i];
 		else {
 			i--;
 			break;
@@ -91,6 +91,10 @@ bool isSymbolFlare(std::string s) {
 */
 bool isBinaryOperator(std::string s) {
 	return std::find(SlateDefinitions::binaryOperators.begin(), SlateDefinitions::binaryOperators.end(), s) != SlateDefinitions::binaryOperators.end();
+}
+
+bool isControlSequenceFunction(std::string s) {
+	return SlateDefinitions::controlSequenceFunctions.count(s);
 }
 
 /*
@@ -235,6 +239,7 @@ SlateContext::SlateContext() {
 	nameMap["\\div"] = SlateDefinitions::division_func;
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
 	nameMap["\\rightarrow"] = SlateDefinitions::setCategoryBinding_func;
+	//nameMap["a"] = new Number(1);
 }
 
 
@@ -413,16 +418,18 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 	if (isOperator(wrapper)) {
 		Type t = ((Known*)wrapper)->o->type;
 		if (t == Types::FUNCTION) return INT_MAX;
-		if (t == Types::BINARY_OPERATOR) return ((BinaryOperator*)wrapper)->precedence;
+		if (t == Types::BINARY_OPERATOR) return ((BinaryOperator*)((Known*)wrapper)->o)->precedence;
 	}
 	return 0;
 }
 
-void shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
+void shuntingYard(std::string line,std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
 
 	std::vector<ObjectSyntaxWrapper*> operators;
 
 	for (ObjectSyntaxWrapper* object : wrappers) {
+
+		std::cout << '\n';
 
 		if (isOperand(object)) {
 
@@ -466,10 +473,39 @@ void shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<Objec
 				}
 			}
 		}
+
+		std::cout << "\nOpStack: ";
+
+		for (size_t i = 0; i < operators.size(); i++) {
+			std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
+		}
+
+		std::cout << '\n';
+
+		std::cout << "OutStack: ";
+
+		for (size_t i = 0; i < output.size(); i++) {
+			std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
+		}
+
 	}
 	while (!empty(operators)) {
 		output.push_back(operators.back());
 		operators.pop_back();
+	}
+
+	std::cout << "\nOpStack: ";
+
+	for (size_t i = 0; i < operators.size(); i++) {
+		std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
+	}
+
+	std::cout << '\n';
+
+	std::cout << "OutStack: ";
+
+	for (size_t i = 0; i < output.size(); i++) {
+		std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
 	}
 }
 
@@ -482,7 +518,7 @@ void SlateContext::processSyntaxLine(std::string& line) {
 	linkTokensToObjects(line, tokens, wrappers);
 
 	std::vector<ObjectSyntaxWrapper*> syOut;
-	shuntingYard(wrappers, syOut);
+	shuntingYard(line, wrappers, syOut);
 
 	parser(syOut);
 
@@ -495,7 +531,8 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t end = 0;
 	size_t i = 0;
 
-	bool flags[2] = { false };
+	bool flags[1] = { false };
+	size_t remainingCtrlSqArgumentsClosed = 0;
 
 	while(!isEnd(line,i)) {
 		std::string current = peek(line, i);
@@ -508,11 +545,13 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == "}") {
 			if (flags[LexerFlags::FRACTION_OPEN_TOP]) {
 				begin = jump(line, i);
+				end = i;
 				if (isEnd(line, i)) throw CompileUnclosedFraction(begin,end);
+				tokens.push_back(Token(TokenTypes::END_FRAC_SCOPE, begin, end));
 				if (peek(line, i) == "{") {
 					jump(line, i);
 					end = i;
-					tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_SECOND, begin, end));
+					//tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_SECOND, begin, end));
 					flags[LexerFlags::FRACTION_OPEN_TOP] = false;
 					flags[LexerFlags::FRACTION_OPEN_BOTTOM] = true;
 				}
@@ -521,7 +560,7 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			else if (flags[LexerFlags::FRACTION_OPEN_BOTTOM]) {
 				begin = jump(line, i);
 				end = i;
-				tokens.push_back(Token(TokenTypes::FRACTION_END, begin, end));
+				//tokens.push_back(Token(TokenTypes::FRACTION_END, begin, end));
 				flags[LexerFlags::FRACTION_OPEN_BOTTOM] = false;
 			}
 			else {
@@ -540,15 +579,22 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		// CHECK FOR SYMBOL START
 		if (isSymbolBase(current)) {
 			begin = jump(line, i);
-			if (peek(line, i) == "_") {
-				jump(line, i);
-				end = i;
-				processSubscript(line, i, begin);
-				end = i;
+			if (isControlSequenceFunction(current)) {
+				flags[LexerFlags::CONVERTING_CTR_SQ_FUNC] = true;
+				remainingCtrlSqArgumentsOpened = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
+				remainingCtrlSqArgumentsClosed = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
 			}
-			else end = i;
+			else {
+				if (peek(line, i) == "_") {
+					jump(line, i);
+					end = i;
+					processSubscript(line, i, begin);
+					end = i;
+				}
+				else end = i;
 
-			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+			}
 			continue;
 		}
 
@@ -600,19 +646,6 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			begin = jump(line, i);
 			end = i;
 			tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
-			continue;
-		}
-
-		if (current == "\\frac") {
-			begin = jump(line, i);
-			if (isEnd(line, i)) throw CompileUnclosedFraction(begin, end);
-			if (peek(line, i) == "{") {
-				jump(line, i);
-				end = i;
-				tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_FIRST, begin, end));
-				flags[LexerFlags::FRACTION_OPEN_TOP] = true;
-			}
-			else throw CompileUnclosedFraction(begin, end);
 			continue;
 		}
 
@@ -952,7 +985,6 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 				i -= 2;
 				removeAt(i, 3, wrappers);
 				addAt(i, out, wrappers);
-				int a = 4;
 			}
 		}
 	}

@@ -5,8 +5,9 @@
 
 std::vector<std::string> SlateDefinitions::symbolBases;
 std::vector<std::string> SlateDefinitions::symbolFlares;
-std::vector<std::string> SlateDefinitions::specialCharacters;
+std::vector<std::string> SlateDefinitions::controlSeqeuenceCharacters;
 std::vector<std::string> SlateDefinitions::binaryOperators;
+std::unordered_map<std::string, std::string> SlateDefinitions::controlSequenceFunctions;
 
 AllSetsSet* SlateDefinitions::AllSets_set;
 Set* SlateDefinitions::AllSets2_set;
@@ -32,12 +33,22 @@ void dumpListToVec(std::string path,std::vector<std::string>& list) {
 	}
 }
 
+void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string>& map) {
+	std::ifstream f(path);
+	std::string name;
+	while (std::getline(f, name)) {
+		size_t sep = name.find(';');
+		map[name.substr(0, sep)] = name.substr(sep + 1, name.size() - sep - 1);
+	}
+}
+
 void SlateDefinitions::load() {
 
 	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
 	dumpListToVec("slate_conf/symbol_flare.list", symbolFlares);
-	dumpListToVec("slate_conf/special_characters.list", specialCharacters);
+	dumpListToVec("slate_conf/ctrl_seq_characters.list", controlSeqeuenceCharacters);
 	dumpListToVec("slate_conf/binary_operators.list", binaryOperators);
+	dumpDictToMap("slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
 
 	AllSets_set = new AllSetsSet();
 	AllSets2_set = AllSets_set->cartesian_with(AllSets_set);

@@ -13,11 +13,8 @@ namespace TokenTypes {
 		BEGIN_SCOPE,			// (
 		END_SCOPE,				// )
 		// VVVVVV
-		FRACTION_BEGIN_FIRST,	// \frac{ ....
-		//			   VV
-		FRACTION_BEGIN_SECOND,	// \frac{ .... }{ ....
-		//                     V
-		FRACTION_END,			// \frac{ .... }{ .... }
+		BEGIN_FRAC_SCOPE,
+		END_FRAC_SCOPE,
 
 		END_COUNT
 	};
@@ -39,8 +36,7 @@ public:
 };
 
 enum LexerFlags {
-	FRACTION_OPEN_TOP,
-	FRACTION_OPEN_BOTTOM
+	CONVERTING_CTR_SQ_FUNC
 };
 
 namespace SyntaxWrapperTypes {
