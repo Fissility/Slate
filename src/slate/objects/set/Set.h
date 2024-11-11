@@ -70,34 +70,13 @@ public:
 					Object* o2 = t->get(1);
 					return in(o1) && other->in(o2);
 				}
-
-				// For fully unwrapped common usage, (e.g. R^2xR gives ((a,b),c), but mostly used as (a,b,c))
-				/*else if (t->length > 2) {
-					for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
-						if (t->length <= i) return false;
-						if (!((Set*)auxiliaryMemory[i])->in(t->get(i))) {
-							return false;
-						}
-					}
-					return true;
-				}
-				return false;*/
 			}
 		);
-		// Push all sets for non canonical notation processing
-		/*if (auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(this); // Means it is not composed of something else
-		else {
-			for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
-				prod->auxiliaryMemory.push_back(auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
-			}
-		}
-		if (other->auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(other); // Means it is not composed of something else
-		else {
-			for (size_t i = 0; i < other->auxiliaryMemory.size();i++) {
-				prod->auxiliaryMemory.push_back(other->auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
-			}
-		}*/
 		return prod;
+	}
+
+	std::string toString() {
+		return "<SET>";
 	}
 
 };

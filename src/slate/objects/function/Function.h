@@ -54,4 +54,8 @@ public:
 		return inverseBuilder(form,constants);
 	}
 
+	std::string toString() {
+		return "<FUNCTION>";
+	}
+
 };

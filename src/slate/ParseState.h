@@ -54,7 +54,7 @@ namespace MarkerTypes {
 		END_SCOPE,
 		EQUALS,
 		COLON,
-		RIGHT_ARROW
+		COMMA
 	};
 }
 
@@ -144,7 +144,6 @@ class Marker : public ObjectSyntaxWrapper {
 public:
 
 	MarkerType mType;
-	StringLocation location;
 
 	Marker(MarkerType mType, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER,  nestingLevel) {
 		this->mType = mType;

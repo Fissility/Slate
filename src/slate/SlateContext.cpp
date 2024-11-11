@@ -239,6 +239,9 @@ SlateContext::SlateContext() {
 	nameMap["\\div"] = SlateDefinitions::division_func;
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
 	nameMap["\\rightarrow"] = SlateDefinitions::setCategoryBinding_func;
+	nameMap["\\frac"] = SlateDefinitions::division_fraction_func;
+	nameMap["^"] = SlateDefinitions::power_func;
+	nameMap["\\sqrt"] = SlateDefinitions::sqrt_func;
 	//nameMap["a"] = new Number(1);
 }
 
@@ -252,10 +255,12 @@ ExpressionInfo SlateContext::newExpression() {
 	return ExpressionInfo( *(expresions[expresions.size() - 1]), expresions.size() - 1 );
 }
 
-void SlateContext::processSyntax() {
+std::vector<Object*> SlateContext::processSyntax() {
+	std::vector<Object*> results;
 	for (std::string* s : expresions) {
-		processSyntaxLine(*s);
+		results.push_back(processSyntaxLine(*s));
 	}
+	return results;
 }
 
 std::string normaliseName(std::string name) {
@@ -287,7 +292,8 @@ std::string normaliseName(std::string name) {
 
 bool isOperator(ObjectSyntaxWrapper* wrapper) {
 	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
-		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
+		Marker* marker = ((Marker*)wrapper);
+		if (marker->mType == MarkerTypes::EQUALS || marker->mType == MarkerTypes::COLON || marker->mType == MarkerTypes::COMMA) return true;
 	}
 	if (wrapper->type == SyntaxWrapperTypes::KNOWN) {
 		Known* i = (Known*)wrapper;
@@ -297,11 +303,11 @@ bool isOperator(ObjectSyntaxWrapper* wrapper) {
 }
 
 bool isOpenBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::BEGIN_SCOPE;
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->mType == MarkerTypes::BEGIN_SCOPE;
 }
 
 bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::END_SCOPE;
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->mType == MarkerTypes::END_SCOPE;
 }
 
 // TODO, implement isOperand
@@ -316,14 +322,11 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 	for (size_t i = 0; i < tokens.size(); i++) {
 		Token& token = tokens[i];
 		size_t nestingLevel = 0;
-		if (i != 0) { // The first token can't possibly be inside brackets
-			for (size_t j = i - 1; j > -1; j--) {
-				if (tokens[j].type == TokenTypes::BEGIN_SCOPE) nestingLevel++;
-				//                                             V This is needed rn, TODO: move bracket detectin upper in the chain
-				if (tokens[j].type == TokenTypes::END_SCOPE && nestingLevel != 0) nestingLevel--;
-			}
+		for (size_t j = 0; j <= i; j++) {
+			if (tokens[j].type == TokenTypes::BEGIN_SCOPE) nestingLevel++;
+			//                                             V This is needed rn, TODO: move bracket detectin upper in the chain
+			if (tokens[j].type == TokenTypes::END_SCOPE && nestingLevel != 0) nestingLevel--;
 		}
-		std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
 		switch (token.type) {
 		case TokenTypes::NUMERICAL_CONSTANT: {
 			size_t begin = token.location.begin;
@@ -335,17 +338,23 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 				if (line[p] != '.') {
 					wholeTotal = wholeTotal * 10 + (line[p] - '0');
 					if (pastDot) dotPlace /= 10;
-				} else pastDot = true;
+				}
+				else pastDot = true;
 			}
 			double result = wholeTotal * dotPlace;
 			objects.push_back(new Known(new Number(result), KnownKinds::OPERAND, token.location, nestingLevel));
 			break;
 		}
 		case TokenTypes::SYMBOL: {
+			std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
 			if (nameExists(name)) {
 				Object* o = nameMap[name];
-
-				objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location, nestingLevel));
+				if (i != tokens.size() - 1 && tokens[i+1].type==TokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
+					objects.push_back(new Known(nameMap[name], KnownKinds::OPERATOR, token.location, nestingLevel));
+				}
+				else {
+					objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location, nestingLevel));
+				}
 			}
 			else {
 				objects.push_back(new Unknown(name, token.location, nestingLevel));
@@ -353,6 +362,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			break;
 		}
 		case TokenTypes::OPERATOR: {
+			std::string name = line.substr(token.location.begin, token.location.end - token.location.begin);
 			if (name == "=") {
 				objects.push_back(new Marker(MarkerTypes::EQUALS, token.location, nestingLevel));
 
@@ -361,10 +371,12 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 				objects.push_back(new Marker(MarkerTypes::COLON, token.location, nestingLevel));
 				break;
 			}
-			else if (nameExists(name)) {
+			else if (name == "," || name == "}") {
+				objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
+			}
+			else if (nameExists(name = normaliseName(name))) {
 
 				KnownKind kind;
-
 				if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
 				else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
 				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
@@ -411,10 +423,13 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 			return INT_MIN;
 		case MarkerTypes::COLON:
 			return INT_MIN + 1;
+		case MarkerTypes::COMMA:
+			return INT_MIN + 2;
 		default:
 			break;
 		}
 	}
+	bool a = isOperator(wrapper);
 	if (isOperator(wrapper)) {
 		Type t = ((Known*)wrapper)->o->type;
 		if (t == Types::FUNCTION) return INT_MAX;
@@ -474,18 +489,18 @@ void shuntingYard(std::string line,std::vector<ObjectSyntaxWrapper*>& wrappers, 
 			}
 		}
 
-		std::cout << "\nOpStack: ";
+		//std::cout << "\nOpStack: ";
 
 		for (size_t i = 0; i < operators.size(); i++) {
-			std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
+			//std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
 		}
 
-		std::cout << '\n';
+		//std::cout << '\n';
 
-		std::cout << "OutStack: ";
+		//std::cout << "OutStack: ";
 
 		for (size_t i = 0; i < output.size(); i++) {
-			std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
+			//std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
 		}
 
 	}
@@ -494,22 +509,22 @@ void shuntingYard(std::string line,std::vector<ObjectSyntaxWrapper*>& wrappers, 
 		operators.pop_back();
 	}
 
-	std::cout << "\nOpStack: ";
+	//std::cout << "\nOpStack: ";
 
 	for (size_t i = 0; i < operators.size(); i++) {
-		std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
+		//std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
 	}
 
-	std::cout << '\n';
+	//std::cout << '\n';
 
-	std::cout << "OutStack: ";
+	//std::cout << "OutStack: ";
 
 	for (size_t i = 0; i < output.size(); i++) {
-		std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
+		//std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
 	}
 }
 
-void SlateContext::processSyntaxLine(std::string& line) {
+Object* SlateContext::processSyntaxLine(std::string& line) {
 
 	std::vector<Token> tokens;
 	lexer(line, tokens);
@@ -522,7 +537,9 @@ void SlateContext::processSyntaxLine(std::string& line) {
 
 	parser(syOut);
 
-	Number* cat = (Number*)((Known*)syOut[0])->o; // 2-4+3
+	//                       V this should in theory note be needed
+	if (syOut.size() != 0 && syOut[0]->type == SyntaxWrapperTypes::KNOWN) return ((Known*)syOut[0])->o;
+	return nullptr;
 
 }
 
@@ -532,39 +549,36 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t i = 0;
 
 	bool flags[1] = { false };
-	size_t remainingCtrlSqArgumentsClosed = 0;
+	size_t remainingCtrlSqArguments = 0;
+	size_t scopeIndex = 0;
 
 	while(!isEnd(line,i)) {
 		std::string current = peek(line, i);
 
 		if (current == "{") {
-			jump(line, i);
+			begin = jump(line, i);
+			end = i;
+			if (flags[LexerFlags::CONVERTING_CTR_SQ_FUNC]) {
+				scopeIndex++;
+			}
 			continue;
 		}
 
 		if (current == "}") {
-			if (flags[LexerFlags::FRACTION_OPEN_TOP]) {
-				begin = jump(line, i);
-				end = i;
-				if (isEnd(line, i)) throw CompileUnclosedFraction(begin,end);
-				tokens.push_back(Token(TokenTypes::END_FRAC_SCOPE, begin, end));
-				if (peek(line, i) == "{") {
-					jump(line, i);
-					end = i;
-					//tokens.push_back(Token(TokenTypes::FRACTION_BEGIN_SECOND, begin, end));
-					flags[LexerFlags::FRACTION_OPEN_TOP] = false;
-					flags[LexerFlags::FRACTION_OPEN_BOTTOM] = true;
+			begin = jump(line, i);
+			end = i;
+			if (flags[LexerFlags::CONVERTING_CTR_SQ_FUNC]) {
+				if (scopeIndex == 0) throw CompileBracketNotOpened(begin, end);
+				scopeIndex--;
+				if (scopeIndex == 0) {
+					remainingCtrlSqArguments--;
+					if (remainingCtrlSqArguments == 0) {
+						tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
+					}
+					else {
+						tokens.push_back(Token(TokenTypes::OPERATOR, begin, end));
+					}
 				}
-				else throw CompileOutOfPlace(begin, end);
-			}
-			else if (flags[LexerFlags::FRACTION_OPEN_BOTTOM]) {
-				begin = jump(line, i);
-				end = i;
-				//tokens.push_back(Token(TokenTypes::FRACTION_END, begin, end));
-				flags[LexerFlags::FRACTION_OPEN_BOTTOM] = false;
-			}
-			else {
-				jump(line, i);
 			}
 			continue;
 		}
@@ -579,10 +593,13 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		// CHECK FOR SYMBOL START
 		if (isSymbolBase(current)) {
 			begin = jump(line, i);
+			end = i;
 			if (isControlSequenceFunction(current)) {
 				flags[LexerFlags::CONVERTING_CTR_SQ_FUNC] = true;
-				remainingCtrlSqArgumentsOpened = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
-				remainingCtrlSqArgumentsClosed = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
+				remainingCtrlSqArguments = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
+				scopeIndex = 0;
+				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+				tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, end, end));
 			}
 			else {
 				if (peek(line, i) == "_") {
@@ -592,7 +609,6 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 					end = i;
 				}
 				else end = i;
-
 				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
 			}
 			continue;
@@ -656,8 +672,8 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
 
 Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel) {
-	bool firstTuple = o1->type == Types::TUPLE && nestingLevel1 >= currentLevel;
-	bool secondTuple = o2->type == Types::TUPLE && nestingLevel2 >= currentLevel;
+	bool firstTuple = o1->type == Types::TUPLE && nestingLevel1 == currentLevel;
+	bool secondTuple = o2->type == Types::TUPLE && nestingLevel2 == currentLevel;
 	size_t size = 0;
 	if (firstTuple) size += ((Tuple*)o1)->length;
 	else size++;
@@ -974,6 +990,16 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 		if (ow->type == SyntaxWrapperTypes::KNOWN) {
 			Known* iow = (Known*)ow;
 
+			if (iow->kind == KnownKinds::OPERATOR) {
+				if (wrappers.size() < 1) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
+
+				ObjectSyntaxWrapper* w = wrappers[i - 1];
+				ObjectSyntaxWrapper* out = funcPass(iow, w, false);
+				i -= 1;
+				removeAt(i, 2, wrappers);
+				addAt(i, out, wrappers);
+			}
+
 			if (iow->kind == KnownKinds::BINARY_OPERATOR) {
 				if (wrappers.size() < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
 
@@ -981,11 +1007,26 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 				ObjectSyntaxWrapper* w2 = wrappers[i - 1];
 				ObjectSyntaxWrapper* joined = joinObjects(w1, w2);
 				ObjectSyntaxWrapper* out = funcPass(iow, joined, true);
-				BiCategory* cat = (BiCategory*)((Known*)out)->o;
 				i -= 2;
 				removeAt(i, 3, wrappers);
 				addAt(i, out, wrappers);
 			}
+		}
+		if (ow->type == SyntaxWrapperTypes::MARKER) {
+			Marker* iow = (Marker*)ow;
+
+			if (iow->mType == MarkerTypes::COMMA) {
+				if (wrappers.size() < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
+
+				ObjectSyntaxWrapper* w1 = wrappers[i - 2];
+				ObjectSyntaxWrapper* w2 = wrappers[i - 1];
+				ObjectSyntaxWrapper* joined = joinObjects(w1, w2, iow->nestingLevel);
+				i -= 2;
+				removeAt(i, 3, wrappers);
+				addAt(i, joined, wrappers);
+
+			}
+
 		}
 	}
 

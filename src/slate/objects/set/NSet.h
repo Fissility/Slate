@@ -27,4 +27,8 @@ public:
 		}
 	) {}
 
+	std::string toString() {
+		return "\\mathbb{N}";
+	}
+
 };

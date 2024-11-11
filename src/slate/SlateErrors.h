@@ -61,15 +61,6 @@ public:
 
 };
 
-class CompileUnclosedFraction : public SlateError {
-public:
-
-	CompileUnclosedFraction(size_t b, size_t e) :SlateError(b, e) {
-		info = std::format("Unclosed \\frac at {}-{}", locationBegin, locationEnd);
-	}
-
-};
-
 class CompileBracketNotClosed : public SlateError {
 public:
 

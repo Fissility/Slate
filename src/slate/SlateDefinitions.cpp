@@ -22,7 +22,9 @@ Function* SlateDefinitions::addition_func;
 Function* SlateDefinitions::subtraction_func;
 Function* SlateDefinitions::multiplication_func;
 Function* SlateDefinitions::division_func;
+Function* SlateDefinitions::division_fraction_func;
 Function* SlateDefinitions::power_func;
+Function* SlateDefinitions::sqrt_func;
 Function* SlateDefinitions::setCategoryBinding_func;
 
 void dumpListToVec(std::string path,std::vector<std::string>& list) {
@@ -94,6 +96,27 @@ void SlateDefinitions::load() {
 		output->value = *n1 / *n2;
 		return output;
 	}, DIVISION);
+
+	division_fraction_func = new Function(R2_set, R_set, [](Object* o) {
+		static Number* output = new Number(0);
+		Tuple* t = (Tuple*)o;
+		Number* n1 = (Number*)t->objects[0];
+		Number* n2 = (Number*)t->objects[1];
+		output->value = *n1 / *n2;
+		return output;
+	});
+
+	power_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
+		//static Number* output = new Number(0);
+		Tuple* t = (Tuple*)o;
+		Number* n1 = (Number*)t->objects[0];
+		Number* n2 = (Number*)t->objects[1];
+		return new Number(std::pow(*n1,*n2));
+	}, POWER);
+
+	sqrt_func = new Function(R_set, R_set, [](Object* o) {
+		return new Number(std::sqrt(*((Number*)o)));
+	});
 
 	setCategoryBinding_func = new BinaryOperator(AllSets2_set, AllSets_set, [](Object* o) {
 		Tuple* t = (Tuple*)o;

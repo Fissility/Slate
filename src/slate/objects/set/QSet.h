@@ -12,4 +12,8 @@ public:
 		}
 	) {}
 
+	std::string toString() {
+		return "\\mathbb{Q}";
+	}
+
 };

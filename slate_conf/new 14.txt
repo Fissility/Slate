@@ -1,0 +1,15 @@
+Materials list:
+
+- Rsp PI 						(62 euroes) 		x1	https://www.tinytronics.nl/en/development-boards/single-board-computers/raspberry-pi-4-model-b-4gb
+- Stepper driver 				(20 euros) 			x1	https://www.omc-stepperonline.com/digital-stepper-driver-1-0-4-2a-20-50vdc-for-nema-17-23-24-stepper-motor-dm542t
+- Water proof limit switches 	(8.5 euros) 		x2	https://www.conrad.nl/nl/p/tru-components-xz-9-104-eindschakelaar-250-v-ac-10-a-zwenkbare-rolhendel-moment-ip65-1-stuk-s-1564392.html?utm_source=google&utm_medium=surfaces&utm_campaign=shopping-feed&utm_content=free-google-shopping-clicks&utm_term=1564392&utm_source=google&utm_medium=cpc&utm_campaign=SH+-+NL+-+Performance+Max+-+High&utm_id=17213980048&gad_source=1&gclid=Cj0KCQiA88a5BhDPARIsAFj595gp0vYaz6-InmLu0ng6W61ekHZh00kgvCjDmNtqnCsoDR4-WrTz4tUaAvEwEALw_wcB&refresh=true	
+- Stepper motors				(TDB)				x2	
+
+- splitter live,neutral 		(1.48 euros)		x2 	https://www.elektramat.nl/phoenix-contact-rijgklem-4-klemposities-met-push-in-aansluiting-2-5-mm-grijs-pt-2-5-quattro/#
+- spliiter ground 				(4,45 euros)		x1	https://www.elektramat.nl/phoenix-contact-rijgklem-4-klemposities-met-push-in-aansluiting-2-5-mm-groen-geel-pt-2-5-quattro-pe/
+- cap							(0.59 eruos)		x1	https://www.elektramat.nl/phoenix-contact-eindplaat-d-st-2-5-quattro-grijs-3030514/
+- holders						(0.63 euros)		x2	https://www.elektramat.nl/phoenix-contact-clipfix-35-eindsteun-3022218/
+- metal support 				(5,65 euros)		x1  https://www.elektramat.nl/jmv-din-rail-ts35sl-per-2-meter-200705/
+- 24V supply 					(62,57 euros)		x1  https://www.elektramat.nl/mean-well-din-rail-voeding-150w-6-25a-24vdc-hdr-150-24/
+- 5V supply 					(15,65 euros)		x2	https://www.elektramat.nl/mean-well-din-rail-voeding-15w-2-4a-5vdc-hdr-15-5/
+- coaxials for antenna			(16 euros)			x3	https://www.allekabels.nl/sma-kabel/1281/3819738/sma-verlengkabel.html

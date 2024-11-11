@@ -30,8 +30,8 @@ public:
 
 	bool nameExists(std::string name);
 	ExpressionInfo newExpression();
-	void processSyntax();
-	void processSyntaxLine(std::string& line);
+	std::vector<Object*> processSyntax();
+	Object* processSyntaxLine(std::string& line);
 	void lexer(std::string& line, std::vector<Token>& tokens);
 	void linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects);
 	void parser(std::vector<ObjectSyntaxWrapper*>& wrappers);

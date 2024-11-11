@@ -16,6 +16,7 @@ enum Presidences {
 	SUBTRACTION = ADDITION,
 	MULTIPLICATION,
 	DIVISION = MULTIPLICATION,
+	POWER,
 	SET_BINDING
 };
 
@@ -40,7 +41,9 @@ namespace SlateDefinitions {
 	extern Function* subtraction_func;
 	extern Function* multiplication_func;
 	extern Function* division_func;
+	extern Function* division_fraction_func;
 	extern Function* power_func;
+	extern Function* sqrt_func;
 	extern Function* setCategoryBinding_func;
 
 	void load();

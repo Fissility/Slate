@@ -25,4 +25,8 @@ public:
 		return Number(value);
 	}
 
+	std::string toString() {
+		return std::to_string(value);
+	}
+
 };
