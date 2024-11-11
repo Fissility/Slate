@@ -22,11 +22,15 @@ public:
 		this->type = Types::EXPRESSION;
 		this->numberOfVariables = numberOfVariables;
 		this->evalFunc = evalFunc;
+		this->hasInverse = false;
 	}
 
-	void setInverse(std::function<void(Object*, Object*[])> reverseFunc) {
+	Expression(size_t numberOfVariables, std::function<Object* (Object**)> evalFunc, std::function<void(Object*, Object* [])> reverseFunc) {
+		this->type = Types::EXPRESSION;
+		this->numberOfVariables = numberOfVariables;
+		this->evalFunc = evalFunc;
 		this->reverseFunc = reverseFunc;
-		hasInverse = true;
+		this->hasInverse = true;
 	}
 
 };

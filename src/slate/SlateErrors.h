@@ -1,156 +1,134 @@
 #pragma once
 
-// Lexer
-/*
-#define OUT_OF_PLACE(S,E) {-1, std::format("Out of place symbol at {}",S),S,E}
-#define EMPTY_SUBSCRIPT(S,E) { -2, std::format("Empty subscript at {}",S),S,E}
-#define UNCLOSED_SUBSCRIPT(S,E) { -3, std::format("Unclosed subscript at {}",S),S,E}
-#define EMPTY_FLARE(S,E) {-4, std::format("Empty flare at {}",S),S,E}
-#define UNCLOSED_FLARE(S,E) {-5, std::format("Unclosed flare at {}",S),S,E}
-#define UNCLOSED_FRACTION(S,E) {-6, std::format("Unclosed fraction at {}",S),S,E}
-
-#define BRACKET_NOT_CLOSED(S,E) {-6, std::format("Bracket at {} was not closed",i),S),S,E}
-#define BRACKET_NOT_OPENED(S,E) {-7, std::format("Bracket at {} was nenver opened",S),S,E}
-#define OPERATOR_NOT_DEFINED(S,E) {-8, std::format("Operator at {} was never defined",E),S,E}
-#define FLOATING_OPERATOR(NAME,S,E) {-9, std::format("Operator {} doesn't have elements on both sides",NAME),S,E}
-#define DOMAIN_EXCEPTION(NAME,S,E) {-9 , std::format("The domain on which {} is defined does not support the attempted operation",NAME),S,E}*/
+#include <format>
 
 class SlateError : public std::exception {
 public:
 	size_t locationBegin;
 	size_t locationEnd;
+	std::string info;
 	SlateError(size_t b, size_t e) {
 		locationBegin = b;
 		locationEnd = e;
+	}
+
+	const char* what() const override {
+		return info.c_str();
 	}
 };
 
 class CompileOutOfPlace : public SlateError {
 public:
 
-	CompileOutOfPlace(size_t b, size_t e):SlateError(b,e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileOutOfPlace(size_t b, size_t e):SlateError(b,e) {
+		info = std::format("Symbol out of place at {}-{}", locationBegin, locationEnd);
 	}
 };
 
 class CompileEmptySubscript : public SlateError {
 public:
 
-	CompileEmptySubscript(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileEmptySubscript(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Empty symbol subscript at {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileUnclosedSubscript : public SlateError {
 public:
 
-	CompileUnclosedSubscript(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileUnclosedSubscript(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Unclosed symbol subscript at {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileEmptyFlare : public SlateError {
 public:
 
-	CompileEmptyFlare(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileEmptyFlare(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Empty flare at {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileUnclosedFlare : public SlateError {
 public:
 
-	CompileUnclosedFlare(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileUnclosedFlare(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Unclosed flare at {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileUnclosedFraction : public SlateError {
 public:
 
-	CompileUnclosedFraction(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileUnclosedFraction(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Unclosed \\frac at {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileBracketNotClosed : public SlateError {
 public:
 
-	CompileBracketNotClosed(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileBracketNotClosed(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Bracket not closed for {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileBracketNotOpened : public SlateError {
 public:
 
-	CompileBracketNotOpened(size_t b, size_t e) :SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileBracketNotOpened(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Bracket not opened for {}-{}", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileOperatorNotDefinied : public SlateError {
 public:
 
-	CompileOperatorNotDefinied(size_t b, size_t e) : SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileOperatorNotDefinied(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Operator at {}-{} is not defined", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileFloatingOperator : public SlateError {
 public:
 
-	CompileFloatingOperator(size_t b, size_t e) : SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileFloatingOperator(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Operator at {}-{} is floating.", locationBegin, locationEnd);
 	}
+
 };
 
 class CompileDomainException : public SlateError {
 public:
 
-	CompileDomainException(size_t b, size_t e) : SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	CompileDomainException(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Operation at {}-{} cannot be performed as the object(s) are outside of the defined function domain.", locationBegin, locationEnd);
 	}
+
 };
 
 class RuntimeDomainException : public SlateError {
 public:
 
-	RuntimeDomainException(size_t b, size_t e) : SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	RuntimeDomainException(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Operation at {}-{} cannot be performed as the object(s) are outside of the defined function domain. (RUNTIME TRIGGERED)", locationBegin, locationEnd);
 	}
+
 };
 
 class RuntimeNoInverse : public SlateError {
 public:
 
-	RuntimeNoInverse(size_t b, size_t e) : SlateError(b, e) {}
-
-	const char* what() const override {
-		return "TODO:write decp";
+	RuntimeNoInverse(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Function/Expression at {}-{} was unable to/can't be inversed. (RUNTIME TRIGGERED)", locationBegin, locationEnd);
 	}
+
 };

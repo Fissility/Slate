@@ -59,12 +59,11 @@ void SlateDefinitions::load() {
 	},ADDITION);
 
 	subtraction_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
-		static Number* output = new Number(0);
+		//static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
 		Number* n1 = (Number*)t->objects[0];
 		Number* n2 = (Number*)t->objects[1];
-		output->value = *n1 - *n2;
-		return output;
+		return new Number(*n1 - *n2);
 	},SUBTRACTION);
 
 	multiplication_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
@@ -86,11 +85,9 @@ void SlateDefinitions::load() {
 	}, DIVISION);
 
 	setCategoryBinding_func = new BinaryOperator(AllSets2_set, AllSets_set, [](Object* o) {
-		static Tuple* tOut = new Tuple(2, new Object*[]{ nullptr,nullptr });
-		BiCategory* t = (BiCategory*)o;
-		tOut->objects[0] = t->get(0);
-		tOut->objects[1] = t->get(1);
-		return tOut;
+		Tuple* t = (Tuple*)o;
+		BiCategory* cat = new BiCategory((*t)[0], (*t)[1]);
+		return cat;
 	}, SET_BINDING);
 
 }

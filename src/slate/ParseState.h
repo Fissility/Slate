@@ -7,6 +7,7 @@ typedef size_t Operator;
 
 namespace TokenTypes {
 	enum TokenTypes {
+		NUMERICAL_CONSTANT,		// Constant real numbers
 		SYMBOL,					// Variable/function name
 		OPERATOR,				// Operator name, mostly included here for better syntax highlighting
 		BEGIN_SCOPE,			// (
@@ -56,7 +57,8 @@ namespace MarkerTypes {
 		BEGIN_SCOPE,
 		END_SCOPE,
 		EQUALS,
-		COLON
+		COLON,
+		RIGHT_ARROW
 	};
 }
 
@@ -69,12 +71,12 @@ public:
 
 	SyntaxWrapperType type;
 	// This is needed for error throwing so in the later stages errors can still point to a location in the initial string
-	Token* assosciatedToken;
 	size_t nestingLevel = 0;
 
-	ObjectSyntaxWrapper(SyntaxWrapperType type, Token* assosciatedToken, size_t nestingLevel) {
+	StringLocation location;
+
+	ObjectSyntaxWrapper(SyntaxWrapperType type, size_t nestingLevel) {
 		this->type = type;
-		this->assosciatedToken = assosciatedToken;
 		this->nestingLevel = nestingLevel;
 	}
 
@@ -97,9 +99,7 @@ public:
 
 	KnownKind kind;
 
-	StringLocation location;
-
-	Known(Object* o, KnownKind kind, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, assosciatedToken, nestingLevel) {
+	Known(Object* o, KnownKind kind, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, nestingLevel) {
 		this->o = o;
 		this->kind = kind;
 		this->location = location;
@@ -112,9 +112,8 @@ class Unknown : public ObjectSyntaxWrapper {
 public:
 
 	std::string name;
-	StringLocation location;
 
-	Unknown(std::string name, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, assosciatedToken, nestingLevel) {
+	Unknown(std::string name, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, nestingLevel) {
 		this->name = name;
 		this->location = location;
 	}
@@ -126,8 +125,7 @@ public:
 
 	Expression* exp;
 	std::vector<Unknown*> depedencies;
-	StringLocation location;
-	Dependent(Expression* exp, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, assosciatedToken, nestingLevel) {
+	Dependent(Expression* exp, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::DEPENDENT, nestingLevel) {
 		this->exp = exp;
 		this->location = location;
 	}
@@ -150,9 +148,11 @@ class Marker : public ObjectSyntaxWrapper {
 public:
 
 	MarkerType mType;
+	StringLocation location;
 
-	Marker(MarkerType mType, Token* assosciatedToken, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER, assosciatedToken, nestingLevel) {
+	Marker(MarkerType mType, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER,  nestingLevel) {
 		this->mType = mType;
+		this->location = location;
 	}
 
 };

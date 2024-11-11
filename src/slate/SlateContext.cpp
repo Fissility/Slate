@@ -3,6 +3,7 @@
 #include "SlateDefinitions.h"
 #include <format>
 #include "SlateErrors.h"
+#include "objects/tuple/BiCategory.h" //X
 #include <iostream>
 #include <stack>
 
@@ -12,8 +13,16 @@
 * @param c Input charracter
 * @return Retruns TRUE if c is a char between a and z or A and Z
 */
-bool isAtoB(char c) {
+bool isAtoZ(char c) {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
+}
+
+/*
+* @param c Input charracter
+* @return Retruns TRUE if c is a char between 0 and 9
+*/
+bool is0to9(char c) {
+	return '0' <= c && c <= '9';
 }
 
 bool isSpecialCharacters(std::string s) {
@@ -33,7 +42,7 @@ std::string getNextTeX(std::string& s, size_t& i) {
 		return name;
 	}
 	while (true) {
-		if (isAtoB(s[i]) && i < s.size()) name += s[i];
+		if (isAtoZ(s[i]) && i < s.size()) name += s[i];
 		else {
 			i--;
 			break;
@@ -92,7 +101,10 @@ bool isBinaryOperator(std::string s) {
 size_t jump(std::string& s, size_t& index) {
 	skipWhiteSpaces(s, index);
 	size_t begin = index;
-	if (s[index] != '\\') {
+	if (is0to9(s[index])) {
+		index++;
+		while (index < s.size() && (is0to9(s[index]) || s[index] == '.')) index++;
+	} else if (s[index] != '\\') {
 		index++;
 	}
 	else {
@@ -112,6 +124,16 @@ std::string peek(std::string& s, size_t index) {
 	if (index >= s.size()) return "";
 	if (s[index] != '\\') {
 		std::string result(1, s[index]);
+		return result;
+	}
+	if (is0to9(s[index])) {
+		std::string result = "";
+		result += s[index++];
+		// TODO: option to change the decimal delimitator between . and ,
+		while (index < s.size() && (is0to9(s[index]) || s[index] == '.')) {
+			index++;
+			result += s[index];
+		}
 		return result;
 	}
 	std::string result = getNextTeX(s, index);
@@ -212,7 +234,7 @@ SlateContext::SlateContext() {
 	nameMap["-"] = SlateDefinitions::subtraction_func;
 	nameMap["\\div"] = SlateDefinitions::division_func;
 	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
-	nameMap["\\Rightarrow"] = SlateDefinitions::setCategoryBinding_func;
+	nameMap["\\rightarrow"] = SlateDefinitions::setCategoryBinding_func;
 }
 
 
@@ -231,6 +253,226 @@ void SlateContext::processSyntax() {
 	}
 }
 
+std::string normaliseName(std::string name) {
+	std::string normal;
+	bool lastWasBackS = false;
+	for (size_t i = 0; i < name.size(); i++) {
+		char c = name[i];
+		switch (c) {
+		case '{':
+		case '}':
+			if (lastWasBackS) {
+				normal += c;
+				lastWasBackS = false;
+			}
+			break;
+		case ' ':
+			break;
+		case '\\':
+			lastWasBackS = true;
+			normal += c;
+			break;
+		default:
+			lastWasBackS = false;
+			normal += c;
+		}
+	}
+	return normal;
+}
+
+bool isOperator(ObjectSyntaxWrapper* wrapper) {
+	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
+		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
+	}
+	if (wrapper->type == SyntaxWrapperTypes::KNOWN) {
+		Known* i = (Known*)wrapper;
+		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR;
+	}
+	return false;
+}
+
+bool isOpenBracket(ObjectSyntaxWrapper* wrapper) {
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::BEGIN_SCOPE;
+}
+
+bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
+	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::END_SCOPE;
+}
+
+// TODO, implement isOperand
+bool isOperand(ObjectSyntaxWrapper* wrapper) {
+	return !isOperator(wrapper) && !isOpenBracket(wrapper) && !isClosedBracket(wrapper);
+}
+
+/*
+* Links names to defined objects and classifies them based on their role in the expression
+*/
+void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
+	for (size_t i = 0; i < tokens.size(); i++) {
+		Token& token = tokens[i];
+		size_t nestingLevel = 0;
+		if (i != 0) { // The first token can't possibly be inside brackets
+			for (size_t j = i - 1; j > -1; j--) {
+				if (tokens[j].type == TokenTypes::BEGIN_SCOPE) nestingLevel++;
+				//                                             V This is needed rn, TODO: move bracket detectin upper in the chain
+				if (tokens[j].type == TokenTypes::END_SCOPE && nestingLevel != 0) nestingLevel--;
+			}
+		}
+		std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
+		switch (token.type) {
+		case TokenTypes::NUMERICAL_CONSTANT: {
+			size_t begin = token.location.begin;
+			size_t end = token.location.end;
+			double wholeTotal = 0;
+			double dotPlace = 1;
+			bool pastDot = false;
+			for (size_t p = begin; p < end; p++) {
+				if (line[p] != '.') {
+					wholeTotal = wholeTotal * 10 + (line[p] - '0');
+					if (pastDot) dotPlace /= 10;
+				} else pastDot = true;
+			}
+			double result = wholeTotal * dotPlace;
+			objects.push_back(new Known(new Number(result), KnownKinds::OPERAND, token.location, nestingLevel));
+			break;
+		}
+		case TokenTypes::SYMBOL: {
+			if (nameExists(name)) {
+				Object* o = nameMap[name];
+
+				objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location, nestingLevel));
+			}
+			else {
+				objects.push_back(new Unknown(name, token.location, nestingLevel));
+			}
+			break;
+		}
+		case TokenTypes::OPERATOR: {
+			if (name == "=") {
+				objects.push_back(new Marker(MarkerTypes::EQUALS, token.location, nestingLevel));
+
+			}
+			else if (name == ":") {
+				objects.push_back(new Marker(MarkerTypes::COLON, token.location, nestingLevel));
+				break;
+			}
+			else if (nameExists(name)) {
+
+				KnownKind kind;
+
+				if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
+				else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
+				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
+
+
+				objects.push_back(new Known(nameMap[name], kind, token.location, nestingLevel));
+			}
+			else throw CompileOperatorNotDefinied(token.location.begin, token.location.end);
+			break;
+		}
+		case TokenTypes::BEGIN_SCOPE: {
+
+			// This means if the last thing was a function mark that function as on operator
+			// If a function is not followed by ( as in, f(..) then it is assumed that the function is not evaluated here
+			// and instead it is treated as an operand, for example f+g, f-g, f \circ g
+			if (!objects.empty()) {
+				ObjectSyntaxWrapper* ow = objects.back();
+				if (ow->type == SyntaxWrapperTypes::KNOWN) {
+					Known* ind = (Known*)ow;
+					Object* o = ind->o;
+					if (o->type == Types::FUNCTION) {
+						ind->kind = KnownKinds::OPERATOR;
+					}
+				}
+			}
+
+			objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, token.location, nestingLevel));
+			break;
+		}
+		case TokenTypes::END_SCOPE: {
+			objects.push_back(new Marker(MarkerTypes::END_SCOPE, token.location, nestingLevel));
+			break;
+		}
+
+		}
+	}
+}
+
+// TODO, implement precedence function
+int precedence(ObjectSyntaxWrapper* wrapper) {
+	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
+		switch (((Marker*)wrapper)->mType) {
+		case MarkerTypes::EQUALS:
+			return INT_MIN;
+		case MarkerTypes::COLON:
+			return INT_MIN + 1;
+		default:
+			break;
+		}
+	}
+	if (isOperator(wrapper)) {
+		Type t = ((Known*)wrapper)->o->type;
+		if (t == Types::FUNCTION) return INT_MAX;
+		if (t == Types::BINARY_OPERATOR) return ((BinaryOperator*)wrapper)->precedence;
+	}
+	return 0;
+}
+
+void shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
+
+	std::vector<ObjectSyntaxWrapper*> operators;
+
+	for (ObjectSyntaxWrapper* object : wrappers) {
+
+		if (isOperand(object)) {
+
+			output.push_back(object);
+
+		}
+		else if (isOperator(object)) {
+
+			while (
+				!empty(operators) &&
+				isOperator(operators.back()) &&
+				precedence(object) <= precedence(operators.back())
+				) {
+
+				output.push_back(operators.back());
+				operators.pop_back();
+			}
+
+			operators.push_back(object);
+
+		}
+		else if (isOpenBracket(object)) {
+
+			operators.push_back(object);
+
+		}
+		else if (isClosedBracket(object)) {
+
+			while (!empty(operators) && !isOpenBracket(operators.back())) {
+				output.push_back(operators.back());
+				operators.pop_back();
+			}
+			if (!empty(operators) && isOpenBracket(operators.back())) {
+				operators.pop_back();
+				if (!operators.empty() && operators.back()->type == SyntaxWrapperTypes::KNOWN) {
+					Known* i = (Known*)operators.back();
+					if (i->kind == KnownKinds::OPERAND) {
+						output.push_back(operators.back());
+						operators.pop_back();
+					}
+				}
+			}
+		}
+	}
+	while (!empty(operators)) {
+		output.push_back(operators.back());
+		operators.pop_back();
+	}
+}
+
 void SlateContext::processSyntaxLine(std::string& line) {
 
 	std::vector<Token> tokens;
@@ -241,6 +483,10 @@ void SlateContext::processSyntaxLine(std::string& line) {
 
 	std::vector<ObjectSyntaxWrapper*> syOut;
 	shuntingYard(wrappers, syOut);
+
+	parser(syOut);
+
+	Number* cat = (Number*)((Known*)syOut[0])->o; // 2-4+3
 
 }
 
@@ -281,6 +527,13 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			else {
 				jump(line, i);
 			}
+			continue;
+		}
+
+		if (is0to9(current[0])) {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::NUMERICAL_CONSTANT, begin, end));
 			continue;
 		}
 
@@ -367,206 +620,6 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	}
 }
 
-std::string normaliseName(std::string name) {
-	std::string normal;
-	bool lastWasBackS = false;
-	for (size_t i = 0; i < name.size(); i++) {
-		char c = name[i];
-		switch (c) {
-			case '{':
-			case '}':
-				if (lastWasBackS) {
-					normal += c;
-					lastWasBackS = false;
-				}
-				break;
-			case ' ' :
-				break;
-			case '\\':
-				lastWasBackS = true;
-				normal += c;
-				break;
-			default:
-				lastWasBackS = false;
-				normal += c;
-		}
-	}
-	return normal;
-}
-
-bool isOperator(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
-		if (wrapper->type == MarkerTypes::EQUALS || wrapper->type == MarkerTypes::COLON) return true;
-	}
-	if (wrapper->type == SyntaxWrapperTypes::KNOWN) {
-		Known* i = (Known*)wrapper;
-		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR;
-	}
-	return false;
-}
-
-bool isOpenBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::BEGIN_SCOPE;
-}
-
-bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->type == MarkerTypes::END_SCOPE;
-}
-
-// TODO, implement isOperand
-bool isOperand(ObjectSyntaxWrapper* wrapper) {
-	return !isOperator(wrapper) && !isOpenBracket(wrapper) && !isClosedBracket(wrapper);
-}
-
-/*
-* Links names to defined objects and classified them based on their role in the expression
-*/
-void SlateContext::linkTokensToObjects(std::string line,std::vector<Token>& tokens, std::vector<ObjectSyntaxWrapper*>& objects) {
-	for (size_t i = 0; i < tokens.size();i++) {
-		Token& token = tokens[i];
-		size_t nestingLevel = 0;
-		for (size_t j = i - 1; j > -1; j--) {
-			if (tokens[j].type == TokenTypes::BEGIN_SCOPE) nestingLevel++;
-			//                                             V This is needed rn, TODO: move bracket detectin upper in the chain
-			if (tokens[j].type == TokenTypes::END_SCOPE && nestingLevel != 0) nestingLevel--;
-		}
-		std::string name = normaliseName(line.substr(token.location.begin, token.location.end-token.location.begin));
-		switch (token.type) {
-			case TokenTypes::SYMBOL: {
-				if (nameExists(name)) {
-					Object* o = nameMap[name];
-
-					objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location,nestingLevel));
-				}
-				else {
-					objects.push_back(new Unknown(name, token.location,nestingLevel));
-				}
-				break;
-			}
-			case TokenTypes::OPERATOR: {
-				if (name == "=") {
-					objects.push_back(new Marker(MarkerTypes::EQUALS, &token,nestingLevel));
-
-				}
-				else if (name == ":") {
-					objects.push_back(new Marker(MarkerTypes::COLON, &token,nestingLevel));
-					break;
-				}
-				else if (nameExists(name)) {
-
-					KnownKind kind;
-
-					if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
-					else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
-					else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
-
-
-					objects.push_back(new Known(nameMap[name], kind, token.location,nestingLevel));
-				}
-				else throw CompileOperatorNotDefinied(token.location.begin, token.location.end);
-				break;
-			}
-			case TokenTypes::BEGIN_SCOPE: {
-
-				// This means if the last thing was a function mark that function as on operator
-				// If a function is not followed by ( as in, f(..) then it is assumed that the function is not evaluated here
-				// and instead it is treated as an operand, for example f+g, f-g, f \circ g
-				if (!objects.empty()) {
-					ObjectSyntaxWrapper* ow = objects.back();
-					if (ow->type == SyntaxWrapperTypes::KNOWN) {
-						Known* ind = (Known*)ow;
-						Object* o = ind->o;
-						if (o->type == Types::FUNCTION) {
-							ind->kind = KnownKinds::OPERATOR;
-						}
-					}
-				}
-
-				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, &token,nestingLevel));
-				break;
-			}
-			case TokenTypes::END_SCOPE: {
-				objects.push_back(new Marker(MarkerTypes::END_SCOPE, &token, nestingLevel));
-				break;
-			}
-
-		}
-	}
-}
-
-// TODO, implement precedence function
-int precedence(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
-		switch (((Marker*)wrapper)->mType) {
-			case MarkerTypes::EQUALS:
-				return INT_MIN;
-			case MarkerTypes::COLON:
-				return INT_MIN + 1;
-			default:
-				break;
-		}
-	}
-	if (isOperand(wrapper)) {
-		return ((BinaryOperator*)wrapper)->precedence;
-	}
-	return 0;
-}
-
-SlateError shuntingYard(std::vector<ObjectSyntaxWrapper*>& wrappers, std::vector<ObjectSyntaxWrapper*>& output) {
-
-	std::vector<ObjectSyntaxWrapper*> operators;
-
-	for (ObjectSyntaxWrapper* object : wrappers) {
-
-		if (isOperand(object)) {
-
-			output.push_back(object);
-
-		}
-		else if (isOperator(object)) {
-
-			while (
-				!empty(operators) &&
-				isOperator(operators.back()) &&
-				precedence(object) <= precedence(operators.back())
-				) {
-
-				output.push_back(operators.back());
-				operators.pop_back();
-			}
-
-			operators.push_back(object);
-
-		}
-		else if (isOpenBracket(object)) {
-
-			operators.push_back(object);
-
-		}
-		else if (isClosedBracket(object)) {
-
-			while (!empty(operators) && !isOpenBracket(operators.back())) {
-				output.push_back(operators.back());
-				operators.pop_back();
-			}
-			if (!empty(operators) && isOpenBracket(operators.back())) {
-				operators.pop_back();
-				if (!operators.empty() && operators.back()->type == SyntaxWrapperTypes::KNOWN) {
-					Known* i = (Known*)operators.back();
-					if (i->kind == KnownKinds::OPERAND) {
-						output.push_back(operators.back());
-						operators.pop_back();
-					}
-				}
-			}
-		}
-	}
-	while (!empty(operators)) {
-		output.push_back(operators.back());
-		operators.pop_back();
-	}
-}
-
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
 
 Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel) {
@@ -588,14 +641,17 @@ Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, 
 	}
 	else arr[index++] = o1;
 	if (secondTuple) {
-		Tuple* tOther = (Tuple*)o1;
+		Tuple* tOther = (Tuple*)o2;
 		for (size_t i = 0; i < tOther->length; i++) {
 			arr[index++] = (*tOther)[i];
 		}
 	}
+	else arr[index++] = o2;
+	return t;
 }
 
 Known* join_kk(Known* k1, Known* k2, size_t commaLevel) {
+	// Only one that doesn't perform some function compositions only returns a known value equal to the tuple of the two
 	return new Known(
 		join(k1->o, k2->o, k1->nestingLevel, k2->nestingLevel, commaLevel),
 		KnownKinds::OPERAND,
@@ -604,13 +660,16 @@ Known* join_kk(Known* k1, Known* k2, size_t commaLevel) {
 	);
 }
 
+// Any inverse implementation besides UU may not be correct going forward
+
 Dependent* join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
 	size_t nestingLevelU1 = u1->nestingLevel;
 	size_t nestingLevelU2 = u2->nestingLevel;
-	Expression* exp = new Expression(1, [=](Object* o[]) {
+	Expression* exp = new Expression(1, 
+	[=](Object* o[]) { // Eval
 		return join(o[0], o[1], nestingLevelU1, nestingLevelU2, commaLevel);
-	});
-	exp->setInverse([=](Object* o,Object* r[]) {
+	},
+	[=](Object* o,Object* r[]) { // Inverse
 		r[0] = (*(Tuple*)o)[0];
 		r[1] = (*(Tuple*)o)[1];
 	});
@@ -632,10 +691,11 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 
 	Expression* expD1 = d1->exp;
 	Expression* expD2 = d2->exp;
-	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, [=](Object* o[]) {
+	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, 
+	[=](Object* o[]) { // Eval
 		return join(expD1->evalFunc(&o[0]), expD2->evalFunc(&o[unknownsCountD1]), nestingLevelD1, nestingLevelD2, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) { // Inverse
 		Tuple* t = (Tuple*)o;
 		if (!expD1->hasInverse) throw RuntimeNoInverse(locationD1.begin,locationD1.end);
 		if (!expD2->hasInverse) throw RuntimeNoInverse(locationD1.begin,locationD2.end);
@@ -656,10 +716,11 @@ Dependent* join_uk(Unknown* u, Known* k, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 	size_t nestingLevelK = k->nestingLevel;
 	Object* ko = k->o;
-	Expression* exp = new Expression(1, [=](Object* o[]) {
+	Expression* exp = new Expression(1, 
+	[=](Object* o[]) {
 		return join(o[0], ko, nestingLevelU, nestingLevelK, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[0];
 	});
 	Dependent* dep = new Dependent(exp, { u->location.begin,k->location.end }, commaLevel);
@@ -673,8 +734,8 @@ Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
 	Object* ko = k->o;
 	Expression* exp = new Expression(1, [=](Object* o[]) {
 		return join(ko, o[0], nestingLevelU, nestingLevelK, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[1];
 	});
 	Dependent* dep = new Dependent(exp, { k->location.begin,u->location.end }, commaLevel);
@@ -689,11 +750,11 @@ Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 
 	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
-	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
+	Expression* exp = new Expression(1 + d->uknownsCount(), 
+	[=](Object* o[]) {
 		return join(o[0], expD->evalFunc(&o[1]), nestingLevelU, nestingLevelD, commaLevel);
-	});
-
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
 		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[1]);
@@ -714,8 +775,8 @@ Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(1 + d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(&o[0]),o[dUnknownsCount], nestingLevelU, nestingLevelD, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
 		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[0]);
@@ -729,23 +790,28 @@ Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 }
 
 Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
+
 	size_t nestingLevelK = k->nestingLevel;
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
 	Object* ko = k->o;
 	StringLocation locationD = d->location;
 	Expression* expD = d->exp;
-	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
+
+	Expression* exp = new Expression(d->uknownsCount(), 
+	[=](Object* o[]) { // Eval
 		return join(ko, expD->evalFunc(o), nestingLevelK, nestingLevelD, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	}, 
+	[=](Object* o, Object* r[]) { // Reverse
 		Tuple* t = (Tuple*)o;
 		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		Tuple t1(t->length - 1, &(*t)[1]);
 		expD->reverseFunc(&t1, &r[0]);
 	});
+
 	Dependent* dep = new Dependent(exp, { k->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
+
 	return dep;
 }
 
@@ -758,8 +824,8 @@ Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
 	Expression* expD = d->exp;
 	Expression* exp = new Expression(d->uknownsCount(), [=](Object* o[]) {
 		return join(expD->evalFunc(o), ko, nestingLevelK, nestingLevelD, commaLevel);
-	});
-	exp->setInverse([=](Object* o, Object* r[]) {
+	},
+	[=](Object* o, Object* r[]) {
 		Tuple* t = (Tuple*)o;
 		if (!expD->hasInverse) throw RuntimeNoInverse(locationD.begin,locationD.end);
 		// TODO: pretty sure this not correct in general so fix this later, will work for most cases
@@ -791,7 +857,8 @@ ObjectSyntaxWrapper* joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper*
 }
 
 Known* func_k(Known* func, Known* k, bool isBinary) {
-	Function* f = (Function*)func;
+	// This also doesn't nest any functions similar to join_kk
+	Function* f = (Function*)func->o;
 	if (!f->domain->in(k->o)) throw CompileDomainException(func->location.begin, func->location.end);
 	Object* result = f->evaluate(k->o);
 
@@ -804,7 +871,8 @@ Known* func_k(Known* func, Known* k, bool isBinary) {
 }
 
 Dependent* func_u(Known* func, Unknown* u) {
-	Function* f = (Function*)func;
+	// An unknown is a signle syntaxtical unmodified object thus, it doesnt need to know if it is a binary function for propper syntax feedback
+	Function* f = (Function*)func->o;
 
 	StringLocation functionLocation = func->location;
 
@@ -820,7 +888,7 @@ Dependent* func_u(Known* func, Unknown* u) {
 }
 
 Dependent* func_d(Known* func, Dependent* d,bool isBinary) {
-	Function* f = (Function*)func;
+	Function* f = (Function*)func->o;
 
 	StringLocation functionLocation = func->location;
 
@@ -842,33 +910,53 @@ Dependent* func_d(Known* func, Dependent* d,bool isBinary) {
 
 }
 
+ObjectSyntaxWrapper* funcPass(Known* func, ObjectSyntaxWrapper* obj,bool isBinary) {
+	SyntaxWrapperType type = obj->type;
+	if (type == SyntaxWrapperTypes::KNOWN) return func_k(func, (Known*)obj, isBinary);
+	if (type == SyntaxWrapperTypes::UNKNOWN) return func_u(func, (Unknown*)obj);
+	if (type == SyntaxWrapperTypes::DEPENDENT) return func_d(func, (Dependent*)obj, isBinary);
+	return nullptr;
+}
+
 // TODO: A way to mark defition headers
 
+void removeAt(size_t index, size_t amount, std::vector<ObjectSyntaxWrapper*>& wrappers) {
+	for (size_t i = 0; i < amount; i++) {
+		wrappers.erase(wrappers.begin() + index);
+	}
+}
+
+void addAt(size_t index, ObjectSyntaxWrapper* obj, std::vector<ObjectSyntaxWrapper*>& wrappers) {
+	wrappers.insert(wrappers.begin() + index, obj);
+}
 
 void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 	// TODO: function composition function
 
 	bool done = false;
 
-	while (!done) {
-		for (size_t i = 0; i < wrappers.size(); i++) {
+	for (size_t i = 0; i < wrappers.size(); i++) {
 
-			ObjectSyntaxWrapper* ow = wrappers[i];
-			if (ow->type == SyntaxWrapperTypes::KNOWN) {
-				Known* iow = (Known*)ow;
+		ObjectSyntaxWrapper* ow = wrappers[i];
+		if (ow->type == SyntaxWrapperTypes::KNOWN) {
+			Known* iow = (Known*)ow;
 
-				if (iow->kind == KnownKinds::BINARY_OPERATOR) {
-					if (wrappers.size() < 2) throw CompileFloatingOperator(ow->assosciatedToken->location.begin, ow->assosciatedToken->location.end);
+			if (iow->kind == KnownKinds::BINARY_OPERATOR) {
+				if (wrappers.size() < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
 
-					SyntaxWrapperType t1 = wrappers[i - 1]->type;
-					SyntaxWrapperType t2 = wrappers[i - 2]->type;
-
-
-
-				}
+				ObjectSyntaxWrapper* w1 = wrappers[i - 2];
+				ObjectSyntaxWrapper* w2 = wrappers[i - 1];
+				ObjectSyntaxWrapper* joined = joinObjects(w1, w2);
+				ObjectSyntaxWrapper* out = funcPass(iow, joined, true);
+				BiCategory* cat = (BiCategory*)((Known*)out)->o;
+				i -= 2;
+				removeAt(i, 3, wrappers);
+				addAt(i, out, wrappers);
+				int a = 4;
 			}
 		}
 	}
+
 }
 
 void SlateContext::removeExpresion(size_t index) {

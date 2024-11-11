@@ -62,7 +62,7 @@ public:
 	Set* cartesian_with(Set* other) {
 		Set* prod = new Set(
 			[=](Object* o) {
-				if ((o->type) != TUPLE) return false;
+				//if ((o->type) != TUPLE) return false;
 				Tuple* t = (Tuple*)o;
 				// For canonical tuple result of the cartesian product
 				if (t->length == 2) {
@@ -72,7 +72,7 @@ public:
 				}
 
 				// For fully unwrapped common usage, (e.g. R^2xR gives ((a,b),c), but mostly used as (a,b,c))
-				else if (t->length > 2) {
+				/*else if (t->length > 2) {
 					for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
 						if (t->length <= i) return false;
 						if (!((Set*)auxiliaryMemory[i])->in(t->get(i))) {
@@ -81,11 +81,11 @@ public:
 					}
 					return true;
 				}
-				return false;
+				return false;*/
 			}
 		);
 		// Push all sets for non canonical notation processing
-		if (auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(this); // Means it is not composed of something else
+		/*if (auxiliaryMemory.size() == 0) prod->auxiliaryMemory.push_back(this); // Means it is not composed of something else
 		else {
 			for (size_t i = 0; i < auxiliaryMemory.size(); i++) {
 				prod->auxiliaryMemory.push_back(auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
@@ -96,7 +96,7 @@ public:
 			for (size_t i = 0; i < other->auxiliaryMemory.size();i++) {
 				prod->auxiliaryMemory.push_back(other->auxiliaryMemory[i]); // Means it is the result of cartesian products and pushes all components onto the new result
 			}
-		}
+		}*/
 		return prod;
 	}
 
