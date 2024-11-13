@@ -378,7 +378,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 
 				KnownKind kind;
 				if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
-				else if (isClosedBracket(objects.back()) || !isOperand(objects.back())) kind = KnownKinds::OPERAND; // Means it is after an operator which means it is an operand
+				else if (isOpenBracket(objects.back()) || isOperator(objects.back())) kind = KnownKinds::OPERAND; 
 				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
 
 
@@ -543,14 +543,37 @@ Object* SlateContext::processSyntaxLine(std::string& line) {
 
 }
 
+void pushOverride(StringLocation location, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
+	for (size_t i = 0; i < tokenOverrides.size(); i++) {
+		StringLocation ol = tokenOverrides[i].location;
+		if (location == ol) {
+			tokenList.push_back(tokenOverrides[i]);
+			tokenOverrides.erase(tokenOverrides.begin() + i);
+			return;
+		}
+	}
+}
+
+void pushToken(Token t, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
+	StringLocation l = t.location;
+	for (size_t i = 0; i < tokenOverrides.size(); i++) {
+		StringLocation ol = tokenOverrides[i].location;
+		if (l == ol) {
+			tokenList.push_back(tokenOverrides[i]);
+			tokenOverrides.erase(tokenOverrides.begin() + i);
+			return;
+		}
+	}
+	tokenList.push_back(t);
+}
+
+
 void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 	size_t begin = 0;
 	size_t end = 0;
 	size_t i = 0;
 
-	bool flags[1] = { false };
-	size_t remainingCtrlSqArguments = 0;
-	size_t scopeIndex = 0;
+	std::vector<Token> tokenOverrides;
 
 	while(!isEnd(line,i)) {
 		std::string current = peek(line, i);
@@ -558,28 +581,14 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 		if (current == "{") {
 			begin = jump(line, i);
 			end = i;
-			if (flags[LexerFlags::CONVERTING_CTR_SQ_FUNC]) {
-				scopeIndex++;
-			}
+			pushOverride({ begin,end }, tokens, tokenOverrides);
 			continue;
 		}
 
 		if (current == "}") {
 			begin = jump(line, i);
 			end = i;
-			if (flags[LexerFlags::CONVERTING_CTR_SQ_FUNC]) {
-				if (scopeIndex == 0) throw CompileBracketNotOpened(begin, end);
-				scopeIndex--;
-				if (scopeIndex == 0) {
-					remainingCtrlSqArguments--;
-					if (remainingCtrlSqArguments == 0) {
-						tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
-					}
-					else {
-						tokens.push_back(Token(TokenTypes::OPERATOR, begin, end));
-					}
-				}
-			}
+			pushOverride({ begin,end }, tokens, tokenOverrides);
 			continue;
 		}
 
@@ -595,9 +604,32 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			begin = jump(line, i);
 			end = i;
 			if (isControlSequenceFunction(current)) {
-				flags[LexerFlags::CONVERTING_CTR_SQ_FUNC] = true;
-				remainingCtrlSqArguments = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
-				scopeIndex = 0;
+				size_t remainingCtrlSqArguments = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
+				size_t scopeIndex = 0;
+				size_t localI = i;
+				size_t localBegin = 0;
+				size_t localEnd = 0;
+				while (remainingCtrlSqArguments != 0) {
+					std::string next = peek(line, localI);
+					localBegin = jump(line, localI);
+					localEnd = localI;
+					if (next == "{") {
+						scopeIndex++;
+					}
+					if (next == "}") {
+						if (scopeIndex == 0) throw CompileBracketNotOpened(localBegin, localEnd);
+						scopeIndex--;
+						if (scopeIndex == 0) {
+							remainingCtrlSqArguments--;
+							if (remainingCtrlSqArguments == 0) {
+								tokenOverrides.push_back(Token(TokenTypes::END_SCOPE, localBegin, localEnd));
+							}
+							else {
+								tokenOverrides.push_back(Token(TokenTypes::OPERATOR, localBegin, localEnd));
+							}
+						}
+					}
+				}
 				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
 				tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, end, end));
 			}
