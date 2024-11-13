@@ -5,6 +5,7 @@ class BinaryOperator : public Function {
 public:
 
 	size_t precedence;
+	bool canBeUnary = false;
 
 	BinaryOperator(Set* domain, Set* codomain, std::function<Object* (Object*)> mapping, int precedence) :
 	Function(domain,codomain,mapping)
@@ -13,10 +14,10 @@ public:
 		this->precedence = precedence;
 	}
 
-	BinaryOperator(Set* domain, Set* codomain, int precedence) :
-	Function(domain, codomain) 
-	{
-		this->precedence = precedence;
+	void hasUnary(bool unary) {
+		this->canBeUnary = unary;
 	}
+
+
 
 };

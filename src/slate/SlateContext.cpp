@@ -204,7 +204,7 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 			begin = jump(line, i);
 		}
 	}
-	// The remaining option is that the object at the subscripit is directly the object
+	// The remaining option is that the object at the subscript is directly the control sequence
 	else {
 		if (isSymbolFlare(peek(line, i))) {
 			begin = jump(line, i);
@@ -242,7 +242,6 @@ SlateContext::SlateContext() {
 	nameMap["\\frac"] = SlateDefinitions::division_fraction_func;
 	nameMap["^"] = SlateDefinitions::power_func;
 	nameMap["\\sqrt"] = SlateDefinitions::sqrt_func;
-	//nameMap["a"] = new Number(1);
 }
 
 
@@ -329,6 +328,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 		}
 		switch (token.type) {
 		case TokenTypes::NUMERICAL_CONSTANT: {
+			// Numerical constants are directly converted to the number object they represent and packed as a known object
 			size_t begin = token.location.begin;
 			size_t end = token.location.end;
 			double wholeTotal = 0;
@@ -346,16 +346,23 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			break;
 		}
 		case TokenTypes::SYMBOL: {
+			// Signifies it is just a name, it can either be some external varaible or a function
 			std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
 			if (nameExists(name)) {
 				Object* o = nameMap[name];
+				// If the next token is the begining of a scope and the object linked to the current token is a function
+				// Then it means that the evaluation of a function is taking place
+				// V V
+				// f (...)
 				if (i != tokens.size() - 1 && tokens[i+1].type==TokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
 					objects.push_back(new Known(nameMap[name], KnownKinds::OPERATOR, token.location, nestingLevel));
 				}
+				// Otherwise if it is a function then it used as an operand (f+g,f-g,f\\circ g) or it isn't a function in which case it is a variable
 				else {
 					objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location, nestingLevel));
 				}
 			}
+			// If the name doesn't exist then it is just marked as an unkn
 			else {
 				objects.push_back(new Unknown(name, token.location, nestingLevel));
 			}
@@ -377,8 +384,14 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			else if (nameExists(name = normaliseName(name))) {
 
 				KnownKind kind;
-				if (objects.empty()) kind = KnownKinds::OPERAND; // Means it is at the start, then it should be an operand
-				else if (isOpenBracket(objects.back()) || isOperator(objects.back())) kind = KnownKinds::OPERAND; 
+				if (objects.empty() || (!isOperand(objects.back()) && !isClosedBracket(objects.back()))) {
+					if (((BinaryOperator*)nameMap[name])->canBeUnary && i != tokens.size() - 1 && (tokens[i + 1].type == TokenTypes::SYMBOL || tokens[i + 1].type == TokenTypes::NUMERICAL_CONSTANT)) {
+						kind = KnownKinds::OPERATOR;
+					}
+					else {
+						kind = KnownKinds::OPERAND;
+					}
+				}
 				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
 
 
@@ -429,11 +442,12 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 			break;
 		}
 	}
-	bool a = isOperator(wrapper);
 	if (isOperator(wrapper)) {
-		Type t = ((Known*)wrapper)->o->type;
-		if (t == Types::FUNCTION) return INT_MAX;
-		if (t == Types::BINARY_OPERATOR) return ((BinaryOperator*)((Known*)wrapper)->o)->precedence;
+		Known* k = (Known*)wrapper;
+		if (k->kind == KnownKinds::OPERATOR) return INT_MAX;
+		if (k->kind == KnownKinds::BINARY_OPERATOR) {
+			return ((BinaryOperator*)((Known*)wrapper)->o)->precedence;
+		}
 	}
 	return 0;
 }
@@ -1023,7 +1037,7 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 			Known* iow = (Known*)ow;
 
 			if (iow->kind == KnownKinds::OPERATOR) {
-				if (wrappers.size() < 1) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
+				if (wrappers.size() < 1 || i < 1) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
 
 				ObjectSyntaxWrapper* w = wrappers[i - 1];
 				ObjectSyntaxWrapper* out = funcPass(iow, w, false);
@@ -1033,7 +1047,7 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 			}
 
 			if (iow->kind == KnownKinds::BINARY_OPERATOR) {
-				if (wrappers.size() < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
+				if (wrappers.size() < 3 || i < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
 
 				ObjectSyntaxWrapper* w1 = wrappers[i - 2];
 				ObjectSyntaxWrapper* w2 = wrappers[i - 1];
@@ -1048,7 +1062,7 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 			Marker* iow = (Marker*)ow;
 
 			if (iow->mType == MarkerTypes::COMMA) {
-				if (wrappers.size() < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
+				if (wrappers.size() < 3 || i < 2) throw CompileFloatingOperator(ow->location.begin, ow->location.end);
 
 				ObjectSyntaxWrapper* w1 = wrappers[i - 2];
 				ObjectSyntaxWrapper* w2 = wrappers[i - 1];

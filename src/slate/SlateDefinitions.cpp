@@ -62,22 +62,30 @@ void SlateDefinitions::load() {
 	R_set = new RSet();
 	R2_set = R_set->cartesian_with(R_set);
 
-	addition_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
-		static Number* output = new Number(0);
-		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
-		output->value = *n1 + *n2;
-		return output;
+	addition_func = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
+		if (o->type == Types::TUPLE) {
+			Tuple* t = (Tuple*)o;
+			Number* n1 = (Number*)t->objects[0];
+			Number* n2 = (Number*)t->objects[1];
+			return (Object*)(new Number(*n1 + *n2));
+		}
+		return (Object*)(new Number(*((Number*)o)));
 	},ADDITION);
 
-	subtraction_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
+	((BinaryOperator*)addition_func)->hasUnary(true);
+
+	subtraction_func = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		//static Number* output = new Number(0);
-		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
-		return new Number(*n1 - *n2);
+		if (o->type == Types::TUPLE) {
+			Tuple* t = (Tuple*)o;
+			Number* n1 = (Number*)t->objects[0];
+			Number* n2 = (Number*)t->objects[1];
+			return (Object*)(new Number(*n1 - *n2));
+		}
+		return (Object*)(new Number(-*((Number*)o)));
 	},SUBTRACTION);
+
+	((BinaryOperator*)subtraction_func)->hasUnary(true);
 
 	multiplication_func = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);

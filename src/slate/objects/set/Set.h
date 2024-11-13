@@ -62,7 +62,7 @@ public:
 	Set* cartesian_with(Set* other) {
 		Set* prod = new Set(
 			[=](Object* o) {
-				//if ((o->type) != TUPLE) return false;
+				if ((o->type) != TUPLE) return false;
 				Tuple* t = (Tuple*)o;
 				// For canonical tuple result of the cartesian product
 				if (t->length == 2) {
