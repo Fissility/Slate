@@ -50,6 +50,7 @@ W
 X
 Y
 Z
+\pi
 \alpha
 \beta
 \gamma
@@ -116,3 +117,12 @@ Z
 \ss
 \frac
 \sqrt
+\sin
+\cos
+\tan
+\csc
+\sec
+\cot
+\arcsin
+\arccos
+\arctan

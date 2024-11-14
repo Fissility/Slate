@@ -112,6 +112,7 @@ class Unknown : public ObjectSyntaxWrapper {
 public:
 
 	std::string name;
+	bool canBeFunctionOrExpression = false;
 
 	Unknown(std::string name, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, nestingLevel) {
 		this->name = name;

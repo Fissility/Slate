@@ -229,24 +229,19 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 
 // ======================================================
 
-SlateContext::SlateContext() {
-	nameMap["\\mathbbN"] = SlateDefinitions::N_set;
-	nameMap["\\mathbbZ"] = SlateDefinitions::Z_set;
-	nameMap["\\mathbbQ"] = SlateDefinitions::Q_set;
-	nameMap["\\mathbbR"] = SlateDefinitions::R_set;
-	nameMap["+"] = SlateDefinitions::addition_func;
-	nameMap["-"] = SlateDefinitions::subtraction_func;
-	nameMap["\\div"] = SlateDefinitions::division_func;
-	nameMap["\\cdot"] = SlateDefinitions::multiplication_func;
-	nameMap["\\rightarrow"] = SlateDefinitions::setCategoryBinding_func;
-	nameMap["\\frac"] = SlateDefinitions::division_fraction_func;
-	nameMap["^"] = SlateDefinitions::power_func;
-	nameMap["\\sqrt"] = SlateDefinitions::sqrt_func;
+
+bool SlateContext::nameExists(std::string& name) {
+	return definitions.find(name) != definitions.end() || defaultDefinitions->find(name) != defaultDefinitions->end();
 }
 
+Object* SlateContext::getObject(std::string& name) {
+	if (definitions.find(name) != definitions.end()) return definitions[name];
+	if (defaultDefinitions->find(name) != defaultDefinitions->end()) return (*defaultDefinitions)[name];
+	return nullptr;
+}
 
-bool SlateContext::nameExists(std::string name) {
-	return nameMap.find(name) != nameMap.end();
+void SlateContext::addDefinition(std::string& name, Object* object) {
+	definitions[name] = object;
 }
 
 ExpressionInfo SlateContext::newExpression() {
@@ -349,21 +344,25 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			// Signifies it is just a name, it can either be some external varaible or a function
 			std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
 			if (nameExists(name)) {
-				Object* o = nameMap[name];
+				Object* o = getObject(name);
 				// If the next token is the begining of a scope and the object linked to the current token is a function
 				// Then it means that the evaluation of a function is taking place
 				// V V
 				// f (...)
 				if (i != tokens.size() - 1 && tokens[i+1].type==TokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
-					objects.push_back(new Known(nameMap[name], KnownKinds::OPERATOR, token.location, nestingLevel));
+					objects.push_back(new Known(getObject(name), KnownKinds::OPERATOR, token.location, nestingLevel));
 				}
 				// Otherwise if it is a function then it used as an operand (f+g,f-g,f\\circ g) or it isn't a function in which case it is a variable
 				else {
-					objects.push_back(new Known(nameMap[name], KnownKinds::OPERAND, token.location, nestingLevel));
+					objects.push_back(new Known(getObject(name), KnownKinds::OPERAND, token.location, nestingLevel));
 				}
 			}
 			// If the name doesn't exist then it is just marked as an unkn
 			else {
+				Unknown* u = new Unknown(name, token.location, nestingLevel);
+				if (i != tokens.size() - 1 && tokens[i + 1].type == TokenTypes::BEGIN_SCOPE) {
+					u->canBeFunctionOrExpression = true;
+				}
 				objects.push_back(new Unknown(name, token.location, nestingLevel));
 			}
 			break;
@@ -385,7 +384,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 
 				KnownKind kind;
 				if (objects.empty() || (!isOperand(objects.back()) && !isClosedBracket(objects.back()))) {
-					if (((BinaryOperator*)nameMap[name])->canBeUnary && i != tokens.size() - 1 && (tokens[i + 1].type == TokenTypes::SYMBOL || tokens[i + 1].type == TokenTypes::NUMERICAL_CONSTANT)) {
+					if (((BinaryOperator*)getObject(name))->canBeUnary && i != tokens.size() - 1 && (tokens[i + 1].type == TokenTypes::SYMBOL || tokens[i + 1].type == TokenTypes::NUMERICAL_CONSTANT)) {
 						kind = KnownKinds::OPERATOR;
 					}
 					else {
@@ -395,7 +394,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
 
 
-				objects.push_back(new Known(nameMap[name], kind, token.location, nestingLevel));
+				objects.push_back(new Known(getObject(name), kind, token.location, nestingLevel));
 			}
 			else throw CompileOperatorNotDefinied(token.location.begin, token.location.end);
 			break;
@@ -503,38 +502,10 @@ void shuntingYard(std::string line,std::vector<ObjectSyntaxWrapper*>& wrappers, 
 			}
 		}
 
-		//std::cout << "\nOpStack: ";
-
-		for (size_t i = 0; i < operators.size(); i++) {
-			//std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
-		}
-
-		//std::cout << '\n';
-
-		//std::cout << "OutStack: ";
-
-		for (size_t i = 0; i < output.size(); i++) {
-			//std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
-		}
-
 	}
 	while (!empty(operators)) {
 		output.push_back(operators.back());
 		operators.pop_back();
-	}
-
-	//std::cout << "\nOpStack: ";
-
-	for (size_t i = 0; i < operators.size(); i++) {
-		//std::cout << line.substr(operators[i]->location.begin, operators[i]->location.end - operators[i]->location.begin) << " ";
-	}
-
-	//std::cout << '\n';
-
-	//std::cout << "OutStack: ";
-
-	for (size_t i = 0; i < output.size(); i++) {
-		//std::cout << line.substr(output[i]->location.begin, output[i]->location.end - output[i]->location.begin) << " ";
 	}
 }
 
@@ -1071,6 +1042,21 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 				removeAt(i, 3, wrappers);
 				addAt(i, joined, wrappers);
 
+			}
+
+			if (iow->mType == MarkerTypes::EQUALS) {
+				if (wrappers.size() == 3) {
+					ObjectSyntaxWrapper* w1 = wrappers[i - 2];
+					ObjectSyntaxWrapper* w2 = wrappers[i - 1];
+					SyntaxWrapperType t1 = w1->type;
+					SyntaxWrapperType t2 = w2->type;
+					if (t1 == SyntaxWrapperTypes::UNKNOWN && t2 == SyntaxWrapperTypes::KNOWN) {
+						addDefinition(((Unknown*)w1)->name, ((Known*)w2)->o);
+					}
+					else if (t2 == SyntaxWrapperTypes::UNKNOWN && t1 == SyntaxWrapperTypes::KNOWN) {
+						addDefinition(((Unknown*)w2)->name, ((Known*)w1)->o);
+					}
+				}
 			}
 
 		}
