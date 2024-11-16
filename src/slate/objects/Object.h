@@ -31,10 +31,6 @@ public:
 	AssosciatedMemory* asoc = nullptr;
 	Type type = Types::UNKNOWN;
 
-	virtual std::string toString() {
-		return "";
-	}
-
 	~Object() {
 		delete asoc;
 	}

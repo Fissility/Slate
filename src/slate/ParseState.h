@@ -9,12 +9,8 @@ namespace TokenTypes {
 	enum TokenTypes {
 		NUMERICAL_CONSTANT,		// Constant real numbers
 		SYMBOL,					// Variable/function name
-		OPERATOR,				// Operator name, mostly included here for better syntax highlighting
 		BEGIN_SCOPE,			// (
 		END_SCOPE,				// )
-		// VVVVVV
-		BEGIN_FRAC_SCOPE,
-		END_FRAC_SCOPE,
 
 		END_COUNT
 	};
@@ -37,10 +33,6 @@ public:
 		this->type = type;
 		location = { begin,end };
 	}
-};
-
-enum LexerFlags {
-	CONVERTING_CTR_SQ_FUNC
 };
 
 namespace SyntaxWrapperTypes {

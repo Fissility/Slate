@@ -250,38 +250,14 @@ ExpressionInfo SlateContext::newExpression() {
 }
 
 std::vector<Object*> SlateContext::processSyntax() {
+	// TODO: clean memory
+	definitions.clear();
+	names.clear();
 	std::vector<Object*> results;
 	for (std::string* s : expresions) {
 		results.push_back(processSyntaxLine(*s));
 	}
 	return results;
-}
-
-std::string normaliseName(std::string name) {
-	std::string normal;
-	bool lastWasBackS = false;
-	for (size_t i = 0; i < name.size(); i++) {
-		char c = name[i];
-		switch (c) {
-		case '{':
-		case '}':
-			if (lastWasBackS) {
-				normal += c;
-				lastWasBackS = false;
-			}
-			break;
-		case ' ':
-			break;
-		case '\\':
-			lastWasBackS = true;
-			normal += c;
-			break;
-		default:
-			lastWasBackS = false;
-			normal += c;
-		}
-	}
-	return normal;
 }
 
 bool isOperator(ObjectSyntaxWrapper* wrapper) {
@@ -307,6 +283,139 @@ bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
 // TODO, implement isOperand
 bool isOperand(ObjectSyntaxWrapper* wrapper) {
 	return !isOperator(wrapper) && !isOpenBracket(wrapper) && !isClosedBracket(wrapper);
+}
+
+void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
+	size_t begin = 0;
+	size_t end = 0;
+	size_t i = 0;
+
+	std::vector<Token> tokenOverrides;
+
+	while (!isEnd(line, i)) {
+		std::string current = peek(line, i);
+
+		if (current == "{") {
+			begin = jump(line, i);
+			end = i;
+			pushOverride({ begin,end }, tokens, tokenOverrides);
+			continue;
+		}
+
+		if (current == "}") {
+			begin = jump(line, i);
+			end = i;
+			pushOverride({ begin,end }, tokens, tokenOverrides);
+			continue;
+		}
+
+		if (current == ",") {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+			continue;
+		}
+
+		if (is0to9(current[0])) {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::NUMERICAL_CONSTANT, begin, end));
+			continue;
+		}
+
+		// CHECK FOR SYMBOL START
+		if (isSymbolBase(current)) {
+			begin = jump(line, i);
+			end = i;
+			if (isControlSequenceFunction(current)) {
+				size_t remainingCtrlSqArguments = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
+				size_t scopeIndex = 0;
+				size_t localI = i;
+				size_t localBegin = 0;
+				size_t localEnd = 0;
+				while (remainingCtrlSqArguments != 0) {
+					std::string next = peek(line, localI);
+					localBegin = jump(line, localI);
+					localEnd = localI;
+					if (next == "{") {
+						scopeIndex++;
+					}
+					if (next == "}") {
+						if (scopeIndex == 0) throw CompileBracketNotOpened(localBegin, localEnd);
+						scopeIndex--;
+						if (scopeIndex == 0) {
+							remainingCtrlSqArguments--;
+							if (remainingCtrlSqArguments == 0) {
+								tokenOverrides.push_back(Token(TokenTypes::END_SCOPE, localBegin, localEnd));
+							}
+							else {
+								tokenOverrides.push_back(Token(TokenTypes::SYMBOL, localBegin, localEnd));
+							}
+						}
+					}
+				}
+				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+				tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, end, end));
+			}
+			else {
+				if (peek(line, i) == "_") {
+					jump(line, i);
+					end = i;
+					processSubscript(line, i, begin);
+					end = i;
+				}
+				else end = i;
+				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+			}
+			continue;
+		}
+
+		// CHECK FOR FLARE START
+		if (isSymbolFlare(current)) {
+			begin = jump(line, i);
+			if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
+			if (peek(line, i) == "{") {
+				jump(line, i);
+				end = i;
+				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, end);
+				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, end);
+				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, end);
+				end = i;
+			}
+			else {
+				if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
+				jump(line, i);
+				end = i;
+			}
+			if (peek(line, i) == "_") {
+				jump(line, i);
+				end = i;
+				processSubscript(line, i, begin);
+				end = i;
+			}
+			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+			continue;
+		}
+
+		// OPEN BRACKET CHECK
+		if (current == "(") {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, begin, end));
+			continue;
+		}
+
+
+		// CLOSED BRACKET CHECK
+		if (current == ")") {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
+			continue;
+		}
+
+		throw CompileOutOfPlace(begin, end);
+	}
 }
 
 /*
@@ -544,147 +653,6 @@ void pushToken(Token t, std::vector<Token>& tokenList, std::vector<Token>& token
 		}
 	}
 	tokenList.push_back(t);
-}
-
-
-void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
-	size_t begin = 0;
-	size_t end = 0;
-	size_t i = 0;
-
-	std::vector<Token> tokenOverrides;
-
-	while(!isEnd(line,i)) {
-		std::string current = peek(line, i);
-
-		if (current == "{") {
-			begin = jump(line, i);
-			end = i;
-			pushOverride({ begin,end }, tokens, tokenOverrides);
-			continue;
-		}
-
-		if (current == "}") {
-			begin = jump(line, i);
-			end = i;
-			pushOverride({ begin,end }, tokens, tokenOverrides);
-			continue;
-		}
-
-		if (current == ",") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
-			continue;
-		}
-
-		if (is0to9(current[0])) {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(TokenTypes::NUMERICAL_CONSTANT, begin, end));
-			continue;
-		}
-
-		// CHECK FOR SYMBOL START
-		if (isSymbolBase(current)) {
-			begin = jump(line, i);
-			end = i;
-			if (isControlSequenceFunction(current)) {
-				size_t remainingCtrlSqArguments = std::atoi(SlateDefinitions::controlSequenceFunctions[current].c_str());
-				size_t scopeIndex = 0;
-				size_t localI = i;
-				size_t localBegin = 0;
-				size_t localEnd = 0;
-				while (remainingCtrlSqArguments != 0) {
-					std::string next = peek(line, localI);
-					localBegin = jump(line, localI);
-					localEnd = localI;
-					if (next == "{") {
-						scopeIndex++;
-					}
-					if (next == "}") {
-						if (scopeIndex == 0) throw CompileBracketNotOpened(localBegin, localEnd);
-						scopeIndex--;
-						if (scopeIndex == 0) {
-							remainingCtrlSqArguments--;
-							if (remainingCtrlSqArguments == 0) {
-								tokenOverrides.push_back(Token(TokenTypes::END_SCOPE, localBegin, localEnd));
-							}
-							else {
-								tokenOverrides.push_back(Token(TokenTypes::SYMBOL, localBegin, localEnd));
-							}
-						}
-					}
-				}
-				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
-				tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, end, end));
-			}
-			else {
-				if (peek(line, i) == "_") {
-					jump(line, i);
-					end = i;
-					processSubscript(line, i, begin);
-					end = i;
-				}
-				else end = i;
-				tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
-			}
-			continue;
-		}
-
-		// CHECK FOR FLARE START
-		if (isSymbolFlare(current)) {
-			begin = jump(line, i);
-			if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
-			if (peek(line, i) == "{") {
-				jump(line, i);
-				end = i;
-				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, end);
-				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, end);
-				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, end);
-				end = i;
-			}
-			else {
-				if (isEnd(line, i)) throw CompileEmptyFlare(begin, end);
-				jump(line, i);
-				end = i;
-			}
-			if (peek(line, i) == "_") {
-				jump(line, i);
-				end = i;
-				processSubscript(line, i, begin);
-				end = i;
-			}
-			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
-			continue;
-		}
-
-		/*if (isBinaryOperator(current)) {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(TokenTypes::OPERATOR, begin, end));
-			continue;
-		}*/
-
-		// OPEN BRACKET CHECK
-		if (current == "(") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(TokenTypes::BEGIN_SCOPE, begin, end));
-			continue;
-		}
-
-
-		// CLOSED BRACKET CHECK
-		if (current == ")") {
-			begin = jump(line, i);
-			end = i;
-			tokens.push_back(Token(TokenTypes::END_SCOPE, begin, end));
-			continue;
-		}
-
-		throw CompileOutOfPlace(begin, end);
-	}
 }
 
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future

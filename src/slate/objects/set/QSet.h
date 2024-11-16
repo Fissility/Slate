@@ -12,8 +12,18 @@ public:
 		}
 	) {}
 
-	std::string toString() {
-		return "\\mathbb{Q}";
-	}
+};
+
+
+class QStarSet : public Set {
+public:
+
+	QStarSet() : Set(
+		[](Object* o) {
+			if (o->type == Types::NUMBER && *(Number*)o == 0) return false;
+			if (o->type != Types::INTERVAL) return false;
+			return true;
+		}
+	) {}
 
 };

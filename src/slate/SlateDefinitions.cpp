@@ -10,6 +10,7 @@ std::vector<std::string> SlateDefinitions::binaryOperators;
 std::unordered_map<std::string, std::string> SlateDefinitions::controlSequenceFunctions;
 
 std::unordered_map<std::string, Object*> SlateDefinitions::defaultDefinitions;
+std::unordered_map<Object*, std::string> SlateDefinitions::defaultNames;
 
 void dumpListToVec(std::string path,std::vector<std::string>& list) {
 	std::ifstream f(path);
@@ -28,6 +29,11 @@ void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string
 	}
 }
 
+void registerObject(Object* o, std::string name) {
+	SlateDefinitions::defaultDefinitions[normaliseName(name)] = o;
+	SlateDefinitions::defaultNames[o] = name;
+}
+
 void SlateDefinitions::load() {
 
 	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
@@ -40,11 +46,37 @@ void SlateDefinitions::load() {
 	Set* AllSets2_set = AllSets_set->cartesian_with(AllSets_set);
 	Set* U_set = new USet();
 	Set* U2_set = U_set->cartesian_with(U_set);
+	Number* infinity = new Number(DBL_MAX);
+
 	Set* N_set = new NSet();
+	registerObject(N_set, "\\mathbb{N}");
+	Set* NStar_set = new NStarSet();
+	registerObject(NStar_set, "\\mathbb{N}^*");
+
 	Set* Z_set = new ZSet();
+	registerObject(Z_set, "\\mathbb{Z}");
+	Set* ZStar_set = new ZStarSet();
+	registerObject(ZStar_set, "\\mathbb{Z}^*");
+
 	Set* Q_set = new QSet();
+	registerObject(Q_set, "\\mathbb{Q}");
+	Set* QStar_set = new QStarSet();
+	registerObject(QStar_set, "\\mathbb{Q}^*");
+
 	Set* R_set = new RSet();
+	registerObject(R_set, "\\mathbb{R}");
+	Set* RStar_set = new RStarSet();
+	registerObject(RStar_set, "\\mathbb{R}^*");
+
 	Set* R2_set = R_set->cartesian_with(R_set);
+	defaultNames[R2_set] = "\\mathbb{R}^2";
+	registerObject(R2_set, "\\mathbb{R}^2");
+
+	Set* R2Star_set = R_set->cartesian_with(RStar_set);
+	defaultNames[R2Star_set] = "\\mathbb{R}\\times\\mathbb{R}^*";
+	registerObject(R2Star_set, "\\mathbb{R}\\times\\mathbb{R}^*");
+
+	Set* RPositive = new IntervalSet(new Number(0), infinity, true, false);
 
 	BinaryOperator* addition = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
@@ -57,10 +89,9 @@ void SlateDefinitions::load() {
 	},ADDITION);
 
 	addition->hasUnary(true);
-	defaultDefinitions["+"] = addition;
+	registerObject(addition, "+");
 
 	BinaryOperator* subtraction = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
-		//static Number* output = new Number(0);
 		if (o->type == Types::TUPLE) {
 			Tuple* t = (Tuple*)o;
 			Number* n1 = (Number*)t->objects[0];
@@ -71,7 +102,7 @@ void SlateDefinitions::load() {
 	},SUBTRACTION);
 
 	subtraction->hasUnary(true);
-	defaultDefinitions["-"] = subtraction;
+	registerObject(subtraction, "-");
 
 	BinaryOperator*  multiplication = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
@@ -81,9 +112,9 @@ void SlateDefinitions::load() {
 		output->value = *n1 * *n2;
 		return output;
 	},MULTIPLICATION);
-	defaultDefinitions["\\cdot"] = multiplication;
+	registerObject(multiplication, "\\cdot");
 
-	BinaryOperator* division = new BinaryOperator(R2_set, R_set, [](Object* o) {
+	BinaryOperator* division = new BinaryOperator(RStar_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
 		Number* n1 = (Number*)t->objects[0];
@@ -91,9 +122,9 @@ void SlateDefinitions::load() {
 		output->value = *n1 / *n2;
 		return output;
 	}, DIVISION);
-	defaultDefinitions["\\div"] = division;
+	registerObject(division, "\\div");
 
-	Function* division_fraction = new Function(R2_set, R_set, [](Object* o) {
+	Function* division_fraction = new Function(RStar_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
 		Number* n1 = (Number*)t->objects[0];
@@ -101,7 +132,7 @@ void SlateDefinitions::load() {
 		output->value = *n1 / *n2;
 		return output;
 	});
-	defaultDefinitions["\\frac"] = division_fraction;
+	registerObject(division_fraction, "\\frac");
 
 	Function* power = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		//static Number* output = new Number(0);
@@ -110,12 +141,13 @@ void SlateDefinitions::load() {
 		Number* n2 = (Number*)t->objects[1];
 		return new Number(std::pow(*n1,*n2));
 	}, POWER);
-	defaultDefinitions["^"] = power;
+	registerObject(power, "^");
 
-	Function*  sqrt = new Function(R_set, R_set, [](Object* o) {
+	Function*  sqrt = new Function(RPositive, R_set, [](Object* o) {
 		return new Number(std::sqrt(*((Number*)o)));
 	});
 	defaultDefinitions["\\sqrt"] = sqrt;
+	registerObject(sqrt, "\\sqrt");
 
 	Function* setCategoryBinding_func = new BinaryOperator(AllSets2_set, AllSets_set, [](Object* o) {
 		Tuple* t = (Tuple*)o;

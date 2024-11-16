@@ -26,13 +26,16 @@ public:
 
 
 	SlateContext();
-	SlateContext(std::unordered_map < std::string, Object* >* defaultDefinitions) {
+	SlateContext(std::unordered_map < std::string, Object* >* defaultDefinitions, std::unordered_map<Object*,std::string>* defaultNames) {
 		this->defaultDefinitions = defaultDefinitions;
+		this->defaultNames = defaultNames;
 	}
 
 
 	std::unordered_map<std::string, Object*>* defaultDefinitions;
+	std::unordered_map<Object*, std::string>* defaultNames;
 	std::unordered_map<std::string, Object*> definitions;
+	std::unordered_map<Object*, std::string> names;
 
 	bool nameExists(std::string& name);
 	Object* getObject(std::string& name);

@@ -75,8 +75,4 @@ public:
 		return prod;
 	}
 
-	std::string toString() {
-		return "<SET>";
-	}
-
 };
