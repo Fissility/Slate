@@ -342,22 +342,48 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 		}
 		case TokenTypes::SYMBOL: {
 			// Signifies it is just a name, it can either be some external varaible or a function
-			std::string name = normaliseName(line.substr(token.location.begin, token.location.end - token.location.begin));
-			if (nameExists(name)) {
+			std::string name = line.substr(token.location.begin, token.location.end - token.location.begin);
+		
+			if (name == "=") {
+				objects.push_back(new Marker(MarkerTypes::EQUALS, token.location, nestingLevel));
+
+			}
+			else if (name == ":") {
+				objects.push_back(new Marker(MarkerTypes::COLON, token.location, nestingLevel));
+			}
+			else if (name == "," || name == "}") {
+				objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
+			}
+			else if (nameExists(name = normaliseName(name))) {
+
 				Object* o = getObject(name);
 				// If the next token is the begining of a scope and the object linked to the current token is a function
 				// Then it means that the evaluation of a function is taking place
 				// V V
 				// f (...)
-				if (i != tokens.size() - 1 && tokens[i+1].type==TokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
+				if (i != tokens.size() - 1 && tokens[i + 1].type == TokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
 					objects.push_back(new Known(getObject(name), KnownKinds::OPERATOR, token.location, nestingLevel));
+				}
+				else if (o->type == Types::BINARY_OPERATOR) {
+					KnownKind kind;
+					if (objects.empty() || (!isOperand(objects.back()) && !isClosedBracket(objects.back()))) {
+						if (((BinaryOperator*)getObject(name))->canBeUnary && i != tokens.size() - 1 && (tokens[i + 1].type == TokenTypes::SYMBOL || tokens[i + 1].type == TokenTypes::NUMERICAL_CONSTANT)) {
+							kind = KnownKinds::OPERATOR;
+						}
+						else {
+							kind = KnownKinds::OPERAND;
+						}
+					}
+					else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
+
+
+					objects.push_back(new Known(getObject(name), kind, token.location, nestingLevel));
 				}
 				// Otherwise if it is a function then it used as an operand (f+g,f-g,f\\circ g) or it isn't a function in which case it is a variable
 				else {
 					objects.push_back(new Known(getObject(name), KnownKinds::OPERAND, token.location, nestingLevel));
 				}
 			}
-			// If the name doesn't exist then it is just marked as an unkn
 			else {
 				Unknown* u = new Unknown(name, token.location, nestingLevel);
 				if (i != tokens.size() - 1 && tokens[i + 1].type == TokenTypes::BEGIN_SCOPE) {
@@ -365,38 +391,6 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 				}
 				objects.push_back(new Unknown(name, token.location, nestingLevel));
 			}
-			break;
-		}
-		case TokenTypes::OPERATOR: {
-			std::string name = line.substr(token.location.begin, token.location.end - token.location.begin);
-			if (name == "=") {
-				objects.push_back(new Marker(MarkerTypes::EQUALS, token.location, nestingLevel));
-
-			}
-			else if (name == ":") {
-				objects.push_back(new Marker(MarkerTypes::COLON, token.location, nestingLevel));
-				break;
-			}
-			else if (name == "," || name == "}") {
-				objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
-			}
-			else if (nameExists(name = normaliseName(name))) {
-
-				KnownKind kind;
-				if (objects.empty() || (!isOperand(objects.back()) && !isClosedBracket(objects.back()))) {
-					if (((BinaryOperator*)getObject(name))->canBeUnary && i != tokens.size() - 1 && (tokens[i + 1].type == TokenTypes::SYMBOL || tokens[i + 1].type == TokenTypes::NUMERICAL_CONSTANT)) {
-						kind = KnownKinds::OPERATOR;
-					}
-					else {
-						kind = KnownKinds::OPERAND;
-					}
-				}
-				else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
-
-
-				objects.push_back(new Known(getObject(name), kind, token.location, nestingLevel));
-			}
-			else throw CompileOperatorNotDefinied(token.location.begin, token.location.end);
 			break;
 		}
 		case TokenTypes::BEGIN_SCOPE: {
@@ -577,6 +571,13 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			continue;
 		}
 
+		if (current == ",") {
+			begin = jump(line, i);
+			end = i;
+			tokens.push_back(Token(TokenTypes::SYMBOL, begin, end));
+			continue;
+		}
+
 		if (is0to9(current[0])) {
 			begin = jump(line, i);
 			end = i;
@@ -610,7 +611,7 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 								tokenOverrides.push_back(Token(TokenTypes::END_SCOPE, localBegin, localEnd));
 							}
 							else {
-								tokenOverrides.push_back(Token(TokenTypes::OPERATOR, localBegin, localEnd));
+								tokenOverrides.push_back(Token(TokenTypes::SYMBOL, localBegin, localEnd));
 							}
 						}
 					}
@@ -658,12 +659,12 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 			continue;
 		}
 
-		if (isBinaryOperator(current)) {
+		/*if (isBinaryOperator(current)) {
 			begin = jump(line, i);
 			end = i;
 			tokens.push_back(Token(TokenTypes::OPERATOR, begin, end));
 			continue;
-		}
+		}*/
 
 		// OPEN BRACKET CHECK
 		if (current == "(") {
