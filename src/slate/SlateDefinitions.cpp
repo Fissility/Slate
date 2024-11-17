@@ -34,7 +34,7 @@ void SlateDefinitions::loadSymbols() {
 	dumpDictToMap("slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
 }
 
-std::string SlateDefinitions::normaliseName(std::string name) {
+std::string normaliseName(std::string name) {
 	std::string normal;
 	bool lastWasBackS = false;
 	for (size_t i = 0; i < name.size(); i++) {
@@ -65,15 +65,15 @@ std::string SlateDefinitions::normaliseName(std::string name) {
 }
 
 void Definitions::registerDefinition(std::string& name, Object* o) {
-	definitions[name] = o;
+	definitions[normaliseName(name)] = o;
 }
 
 bool Definitions::objectExists(std::string& name) {
-	return definitions.find(name) != definitions.end();
+	return definitions.find(normaliseName(name)) != definitions.end();
 }
 
 Object* Definitions::getObject(std::string& name) {
-	return definitions[name];
+	return definitions[normaliseName(name)];
 }
 
 void Definitions::registerString(Object* o, std::string string) {

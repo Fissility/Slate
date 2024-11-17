@@ -380,11 +380,18 @@ void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
 				size_t localBegin = 0;
 				size_t localEnd = 0;
 				while (remainingCtrlSqArguments != 0) {
+					if (isEnd(line, localI)) {
+						if (scopeIndex != 0) throw CompileControlSequenceFunctionUnclosedBracket(localBegin, localEnd);
+						else throw CompileControlSequenceFunctionNotEnoughArguments(localBegin, localEnd);
+					}
 					std::string next = peek(line, localI);
 					localBegin = jump(line, localI);
 					localEnd = localI;
 					if (next == "{") {
 						scopeIndex++;
+					}
+					else if (scopeIndex == 0) {
+						throw CompileControlSequenceFunctionNotEnoughArguments(localBegin, localEnd);
 					}
 					if (next == "}") {
 						if (scopeIndex == 0) throw CompileBracketNotOpened(localBegin, localEnd);
@@ -509,7 +516,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			else if (name == "," || name == "}") {
 				objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
 			}
-			else if (nameExists(name = SlateDefinitions::normaliseName(name))) {
+			else if (nameExists(name)) {
 
 				Object* o = getObject(name);
 				// If the next token is the begining of a scope and the object linked to the current token is a function
@@ -673,13 +680,14 @@ Object* SlateContext::processSyntaxLine(std::string& line) {
 
 	//                       V this should in theory note be needed
 	if (syOut.size() != 0 && syOut[0]->type == SyntaxWrapperTypes::KNOWN) return ((Known*)syOut[0])->o;
+	if (syOut.size() != 0 && syOut[0]->type == SyntaxWrapperTypes::DEPENDENT) return ((Dependent*)syOut[0])->exp;
 	return nullptr;
 
 }
 
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
 
-Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel) {
+Tuple* SlateContext::join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel) {
 	bool firstTuple = o1->type == Types::TUPLE && nestingLevel1 == currentLevel;
 	bool secondTuple = o2->type == Types::TUPLE && nestingLevel2 == currentLevel;
 	size_t size = 0;
@@ -707,7 +715,7 @@ Tuple* join(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, 
 	return t;
 }
 
-Known* join_kk(Known* k1, Known* k2, size_t commaLevel) {
+Known* SlateContext::join_kk(Known* k1, Known* k2, size_t commaLevel) {
 	// Only one that doesn't perform some function compositions only returns a known value equal to the tuple of the two
 	return new Known(
 		join(k1->o, k2->o, k1->nestingLevel, k2->nestingLevel, commaLevel),
@@ -719,7 +727,7 @@ Known* join_kk(Known* k1, Known* k2, size_t commaLevel) {
 
 // Any inverse implementation besides UU may not be correct going forward
 
-Dependent* join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
+Dependent* SlateContext::join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
 	size_t nestingLevelU1 = u1->nestingLevel;
 	size_t nestingLevelU2 = u2->nestingLevel;
 	Expression* exp = new Expression(1, 
@@ -730,13 +738,14 @@ Dependent* join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
 		r[0] = (*(Tuple*)o)[0];
 		r[1] = (*(Tuple*)o)[1];
 	});
+	definitions.registerString(exp, "(" + u1->name + "," + u2->name + ")");
 	Dependent* dep = new Dependent(exp, { u1->location.begin,u2->location.end }, commaLevel);
 	dep->addDependecy(u1);
 	dep->addDependecy(u2);
 	return dep;
 }
 
-Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
+Dependent* SlateContext::join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 	size_t nestingLevelD1 = d1->nestingLevel;
 	size_t nestingLevelD2 = d2->nestingLevel;
 
@@ -762,6 +771,7 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 		expD1->reverseFunc(&t1, &r[0]);
 		expD2->reverseFunc(&t2, &r[unknownsCountD1]);
 	});
+	definitions.registerString(exp, "(" + getObjectName(expD1) + "," + getObjectName(expD2) + ")");
 	Dependent* dep = new Dependent(exp, { d1->location.begin,d2->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d1);
 	dep->addAllDependeciesFrom(d2);
@@ -769,7 +779,7 @@ Dependent* join_dd(Dependent* d1, Dependent* d2, size_t commaLevel) {
 
 }
 
-Dependent* join_uk(Unknown* u, Known* k, size_t commaLevel) {
+Dependent* SlateContext::join_uk(Unknown* u, Known* k, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 	size_t nestingLevelK = k->nestingLevel;
 	Object* ko = k->o;
@@ -780,12 +790,13 @@ Dependent* join_uk(Unknown* u, Known* k, size_t commaLevel) {
 	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[0];
 	});
+	definitions.registerString(exp, "(" + u->name + "," + getObjectName(ko) + ")");
 	Dependent* dep = new Dependent(exp, { u->location.begin,k->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
 }
 
-Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
+Dependent* SlateContext::join_ku(Known* k, Unknown* u, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 	size_t nestingLevelK = k->nestingLevel;
 	Object* ko = k->o;
@@ -795,12 +806,13 @@ Dependent* join_ku(Known* k, Unknown* u, size_t commaLevel) {
 	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[1];
 	});
+	definitions.registerString(exp, "(" + getObjectName(ko) + "," + u->name + ")");
 	Dependent* dep = new Dependent(exp, { k->location.begin,u->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
 }
 
-Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
+Dependent* SlateContext::join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 
 	size_t nestingLevelD = d->nestingLevel;
@@ -818,13 +830,14 @@ Dependent* join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 		r[0] = (*t)[0];
 		expD->reverseFunc(&t1, &r[1]);
 	});
+	definitions.registerString(exp, "(" + u->name + "," + getObjectName(expD) + ")");
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addDependecy(u);
 	dep->addAllDependeciesFrom(d);
 	return dep;
 }
 
-Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
+Dependent* SlateContext::join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 	size_t nestingLevelU = u->nestingLevel;
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
@@ -840,13 +853,14 @@ Dependent* join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 		r[dUnknownsCount] = (*t)[t->length-1];
 		expD->reverseFunc(&t1, &r[0]);
 	});
+	definitions.registerString(exp, "(" + getObjectName(expD) + "," + u->name + ")");
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 	dep->addDependecy(u);
 	return dep;
 }
 
-Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
+Dependent* SlateContext::join_kd(Known* k, Dependent* d, size_t commaLevel) {
 
 	size_t nestingLevelK = k->nestingLevel;
 	size_t nestingLevelD = d->nestingLevel;
@@ -865,14 +879,14 @@ Dependent* join_kd(Known* k, Dependent* d, size_t commaLevel) {
 		Tuple t1(t->length - 1, &(*t)[1]);
 		expD->reverseFunc(&t1, &r[0]);
 	});
-
+	definitions.registerString(exp, "(" + getObjectName(ko) + "," + getObjectName(expD) + ")");
 	Dependent* dep = new Dependent(exp, { k->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 
 	return dep;
 }
 
-Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
+Dependent* SlateContext::join_dk(Dependent* d, Known* k, size_t commaLevel) {
 	size_t nestingLevelK = k->nestingLevel;
 	size_t nestingLevelD = d->nestingLevel;
 	size_t dUnknownsCount = d->uknownsCount();
@@ -889,12 +903,13 @@ Dependent* join_dk(Dependent* d, Known* k, size_t commaLevel) {
 		Tuple t1(t->length - 1, &(*t)[0]);
 		expD->reverseFunc(&t1, &r[0]);
 	});
+	definitions.registerString(exp, "(" + getObjectName(expD) + "," + getObjectName(ko) + ")");
 	Dependent* dep = new Dependent(exp, { d->location.begin,k->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 	return dep;
 }
 
-ObjectSyntaxWrapper* joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper* right, size_t commaLevel = SIZE_MAX) {
+ObjectSyntaxWrapper* SlateContext::joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper* right, size_t commaLevel) {
 	if (left->type == SyntaxWrapperTypes::KNOWN) {
 		if (right->type == SyntaxWrapperTypes::KNOWN) return join_kk((Known*)left, (Known*)right, commaLevel);
 		if (right->type == SyntaxWrapperTypes::UNKNOWN) return join_ku((Known*)left, (Unknown*)right, commaLevel);
@@ -913,7 +928,7 @@ ObjectSyntaxWrapper* joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper*
 	return nullptr;
 }
 
-Known* func_k(Known* func, Known* k, bool isBinary) {
+Known* SlateContext::func_k(Known* func, Known* k, bool isBinary) {
 	// This also doesn't nest any functions similar to join_kk
 	Function* f = (Function*)func->o;
 	if (!f->domain->in(k->o)) throw CompileDomainException(func->location.begin, func->location.end);
@@ -927,7 +942,7 @@ Known* func_k(Known* func, Known* k, bool isBinary) {
 	return new Known(result, KnownKinds::OPERAND, location, func->nestingLevel);
 }
 
-Dependent* func_u(Known* func, Unknown* u) {
+Dependent* SlateContext::func_u(Known* func, Unknown* u) {
 	// An unknown is a signle syntaxtical unmodified object thus, it doesnt need to know if it is a binary function for propper syntax feedback
 	Function* f = (Function*)func->o;
 
@@ -937,14 +952,14 @@ Dependent* func_u(Known* func, Unknown* u) {
 		if (!f->domain->in(o[0])) throw RuntimeDomainException(functionLocation.begin, functionLocation.end);
 		return f->evaluate(o[0]);
 	});
-
+	definitions.registerString(exp, getObjectName(f) + "(" + u->name + ")");
 	Dependent* dep = new Dependent(exp, { func->location.begin,u->location.end }, func->nestingLevel);
 	dep->addDependecy(u);
 	return dep;
 
 }
 
-Dependent* func_d(Known* func, Dependent* d,bool isBinary) {
+Dependent* SlateContext::func_d(Known* func, Dependent* d,bool isBinary) {
 	Function* f = (Function*)func->o;
 
 	StringLocation functionLocation = func->location;
@@ -960,14 +975,36 @@ Dependent* func_d(Known* func, Dependent* d,bool isBinary) {
 	StringLocation location;
 	if (isBinary) location = { d->location.begin,d->location.end };
 	else location = { func->location.begin,d->location.end };
-
+	if (isBinary) {
+		size_t scopeIndex = 0;
+		std::string expName = getObjectName(expD);
+		for (size_t i = 0; i < expName.length(); i++) {
+			if (expName[i] == '(') scopeIndex++;
+			if (expName[i] == ')') scopeIndex--;
+			if (expName[i] == ',' && scopeIndex == 1) {
+				std::string left = expName.substr(1, i - 1);
+				std::string right = expName.substr(i + 1, expName.size() - (i+1) - 1);
+				definitions.registerString(exp, "(" + left + getObjectName(f) + right + ")");
+				break;
+			}
+		}
+	}
+	else {
+		std::string expName = getObjectName(expD);
+		if (expName[0] == '(') {
+			definitions.registerString(exp, getObjectName(f) + expName);
+		}
+		else {
+			definitions.registerString(exp, getObjectName(f) + "(" + expName + ")");
+		}
+	}
 	Dependent* dep = new Dependent(exp, location, func->nestingLevel);
 	dep->addAllDependeciesFrom(d);
 	return dep;
 
 }
 
-ObjectSyntaxWrapper* funcPass(Known* func, ObjectSyntaxWrapper* obj,bool isBinary) {
+ObjectSyntaxWrapper* SlateContext::funcPass(Known* func, ObjectSyntaxWrapper* obj,bool isBinary) {
 	SyntaxWrapperType type = obj->type;
 	if (type == SyntaxWrapperTypes::KNOWN) return func_k(func, (Known*)obj, isBinary);
 	if (type == SyntaxWrapperTypes::UNKNOWN) return func_u(func, (Unknown*)obj);

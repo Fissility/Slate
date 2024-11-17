@@ -106,6 +106,24 @@ public:
 
 };
 
+class CompileControlSequenceFunctionNotEnoughArguments : public SlateError {
+public:
+
+	CompileControlSequenceFunctionNotEnoughArguments(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Function at {}-{} has not enough arguments.", locationBegin, locationEnd);
+	}
+
+};
+
+class CompileControlSequenceFunctionUnclosedBracket : public SlateError {
+public:
+
+	CompileControlSequenceFunctionUnclosedBracket(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Function at {}-{} is missing control sequence argument ending.", locationBegin, locationEnd);
+	}
+
+};
+
 class RuntimeDomainException : public SlateError {
 public:
 

@@ -49,7 +49,6 @@ namespace SlateDefinitions {
 	extern std::unordered_map<std::string, std::string> controlSequenceFunctions;
 
 	extern void loadSymbols();
-	extern std::string normaliseName(std::string name);
 	extern Definitions buildDefaultDefinitions();
 
 }
