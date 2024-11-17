@@ -11,36 +11,6 @@
 #include "objects/set/IntervalSet.h"
 #include "objects/function/BinaryOperator.h"
 
-std::string normaliseName(std::string name) {
-	std::string normal;
-	bool lastWasBackS = false;
-	for (size_t i = 0; i < name.size(); i++) {
-		char c = name[i];
-		switch (c) {
-			case '{':
-			case '}': {
-				if (lastWasBackS) {
-					normal += c;
-					lastWasBackS = false;
-				}
-				break;
-			}
-			case ' ':
-				break;
-			case '\\': {
-				lastWasBackS = true;
-				normal += c;
-				break;
-			}
-			default: {
-				lastWasBackS = false;
-				normal += c;
-			}
-		}
-	}
-	return normal;
-}
-
 enum Presidences {
 	ELEMENT_BINDING,
 	ADDITION,
@@ -52,6 +22,24 @@ enum Presidences {
 	CARTESIAN
 };
 
+struct Definitions {
+	// Map of objects and the names by which they are identified
+	std::unordered_map <std::string, Object*> definitions;
+	// Map of the printable strings of some objects
+	std::unordered_map <Object*, std::string> stringValues;
+	void registerDefinition(std::string& name, Object* o);
+	bool objectExists(std::string& name);
+	Object* getObject(std::string& name);
+
+	void registerString(Object* o, std::string string);
+	bool objectHasString(Object* o);
+	std::string getString(Object* o);
+
+	void registerBaseObject(Object* o, std::string name);
+
+	void clear();
+};
+
 namespace SlateDefinitions {
 	
 	extern std::vector<std::string> symbolBases;
@@ -60,9 +48,8 @@ namespace SlateDefinitions {
 	extern std::vector<std::string> binaryOperators;
 	extern std::unordered_map<std::string, std::string> controlSequenceFunctions;
 
-	extern std::unordered_map <std::string, Object*> defaultDefinitions;
-	extern std::unordered_map <Object*, std::string> defaultNames;
-
-	void load();
+	extern void loadSymbols();
+	extern std::string normaliseName(std::string name);
+	extern Definitions buildDefaultDefinitions();
 
 }

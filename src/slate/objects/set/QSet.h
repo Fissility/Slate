@@ -20,7 +20,7 @@ public:
 
 	QStarSet() : Set(
 		[](Object* o) {
-			if (o->type == Types::NUMBER && *(Number*)o == 0) return false;
+			if (o->type == Types::NUMBER) return *(Number*)o != 0;
 			if (o->type != Types::INTERVAL) return false;
 			return true;
 		}

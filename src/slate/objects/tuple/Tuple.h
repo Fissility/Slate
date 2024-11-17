@@ -24,14 +24,4 @@ public:
 		return objects[index];
 	}
 
-	std::string toString() {
-		std::string out = "(";
-		for (size_t i = 0; i < length; i++) {
-			out += objects[i]->toString();
-			if (i != length - 1) out += ",";
-		}
-		out += ")";
-		return out;
-	}
-
 };

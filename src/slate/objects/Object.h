@@ -2,20 +2,7 @@
 
 #include <vector>
 #include <string>
-
-enum Types {
-	UNKNOWN,
-	NUMBER,
-	INTERVAL,
-	SET,
-	FUNCTION,
-	BINARY_OPERATOR,
-	TUPLE,
-	CATEGORY,
-	EXPRESSION
-};
-
-typedef size_t Type;
+#include "Types.h"
 
 struct AssosciatedMemory {
 	std::vector<void*> auxiliaryMemory;

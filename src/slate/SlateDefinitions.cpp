@@ -9,9 +9,6 @@ std::vector<std::string> SlateDefinitions::controlSeqeuenceCharacters;
 std::vector<std::string> SlateDefinitions::binaryOperators;
 std::unordered_map<std::string, std::string> SlateDefinitions::controlSequenceFunctions;
 
-std::unordered_map<std::string, Object*> SlateDefinitions::defaultDefinitions;
-std::unordered_map<Object*, std::string> SlateDefinitions::defaultNames;
-
 void dumpListToVec(std::string path,std::vector<std::string>& list) {
 	std::ifstream f(path);
 	std::string name;
@@ -29,18 +26,81 @@ void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string
 	}
 }
 
-void registerObject(Object* o, std::string name) {
-	SlateDefinitions::defaultDefinitions[normaliseName(name)] = o;
-	SlateDefinitions::defaultNames[o] = name;
-}
-
-void SlateDefinitions::load() {
-
+void SlateDefinitions::loadSymbols() {
 	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
 	dumpListToVec("slate_conf/symbol_flare.list", symbolFlares);
 	dumpListToVec("slate_conf/ctrl_seq_characters.list", controlSeqeuenceCharacters);
 	dumpListToVec("slate_conf/binary_operators.list", binaryOperators);
 	dumpDictToMap("slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
+}
+
+std::string SlateDefinitions::normaliseName(std::string name) {
+	std::string normal;
+	bool lastWasBackS = false;
+	for (size_t i = 0; i < name.size(); i++) {
+		char c = name[i];
+		switch (c) {
+		case '{':
+		case '}': {
+			if (lastWasBackS) {
+				normal += c;
+				lastWasBackS = false;
+			}
+			break;
+		}
+		case ' ':
+			break;
+		case '\\': {
+			lastWasBackS = true;
+			normal += c;
+			break;
+		}
+		default: {
+			lastWasBackS = false;
+			normal += c;
+		}
+		}
+	}
+	return normal;
+}
+
+void Definitions::registerDefinition(std::string& name, Object* o) {
+	definitions[name] = o;
+}
+
+bool Definitions::objectExists(std::string& name) {
+	return definitions.find(name) != definitions.end();
+}
+
+Object* Definitions::getObject(std::string& name) {
+	return definitions[name];
+}
+
+void Definitions::registerString(Object* o, std::string string) {
+	stringValues[o] = string;
+}
+
+bool Definitions::objectHasString(Object* o) {
+	return stringValues.find(o) != stringValues.end();
+}
+
+std::string Definitions::getString(Object* o) {
+	return stringValues[o];
+}
+
+void Definitions::registerBaseObject(Object* o, std::string name) {
+	registerDefinition(name, o);
+	registerString(o, name);
+}
+
+void Definitions::clear() {
+	definitions.clear();
+	stringValues.clear();
+}
+
+Definitions SlateDefinitions::buildDefaultDefinitions() {
+
+	Definitions defs;
 
 	Set* AllSets_set = new AllSetsSet();
 	Set* AllSets2_set = AllSets_set->cartesian_with(AllSets_set);
@@ -49,32 +109,30 @@ void SlateDefinitions::load() {
 	Number* infinity = new Number(DBL_MAX);
 
 	Set* N_set = new NSet();
-	registerObject(N_set, "\\mathbb{N}");
+	defs.registerBaseObject(N_set, "\\mathbb{N}");
 	Set* NStar_set = new NStarSet();
-	registerObject(NStar_set, "\\mathbb{N}^*");
+	defs.registerBaseObject(NStar_set, "\\mathbb{N}^*");
 
 	Set* Z_set = new ZSet();
-	registerObject(Z_set, "\\mathbb{Z}");
+	defs.registerBaseObject(Z_set, "\\mathbb{Z}");
 	Set* ZStar_set = new ZStarSet();
-	registerObject(ZStar_set, "\\mathbb{Z}^*");
+	defs.registerBaseObject(ZStar_set, "\\mathbb{Z}^*");
 
 	Set* Q_set = new QSet();
-	registerObject(Q_set, "\\mathbb{Q}");
+	defs.registerBaseObject(Q_set, "\\mathbb{Q}");
 	Set* QStar_set = new QStarSet();
-	registerObject(QStar_set, "\\mathbb{Q}^*");
+	defs.registerBaseObject(QStar_set, "\\mathbb{Q}^*");
 
 	Set* R_set = new RSet();
-	registerObject(R_set, "\\mathbb{R}");
+	defs.registerBaseObject(R_set, "\\mathbb{R}");
 	Set* RStar_set = new RStarSet();
-	registerObject(RStar_set, "\\mathbb{R}^*");
+	defs.registerBaseObject(RStar_set, "\\mathbb{R}^*");
 
 	Set* R2_set = R_set->cartesian_with(R_set);
-	defaultNames[R2_set] = "\\mathbb{R}^2";
-	registerObject(R2_set, "\\mathbb{R}^2");
+	defs.registerBaseObject(R2_set, "\\mathbb{R}^2");
 
 	Set* R2Star_set = R_set->cartesian_with(RStar_set);
-	defaultNames[R2Star_set] = "\\mathbb{R}\\times\\mathbb{R}^*";
-	registerObject(R2Star_set, "\\mathbb{R}\\times\\mathbb{R}^*");
+	defs.registerBaseObject(R2Star_set, "\\mathbb{R}\\times\\mathbb{R}^*");
 
 	Set* RPositive = new IntervalSet(new Number(0), infinity, true, false);
 
@@ -89,7 +147,7 @@ void SlateDefinitions::load() {
 	},ADDITION);
 
 	addition->hasUnary(true);
-	registerObject(addition, "+");
+	defs.registerBaseObject(addition, "+");
 
 	BinaryOperator* subtraction = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
@@ -102,7 +160,7 @@ void SlateDefinitions::load() {
 	},SUBTRACTION);
 
 	subtraction->hasUnary(true);
-	registerObject(subtraction, "-");
+	defs.registerBaseObject(subtraction, "-");
 
 	BinaryOperator*  multiplication = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
@@ -112,9 +170,9 @@ void SlateDefinitions::load() {
 		output->value = *n1 * *n2;
 		return output;
 	},MULTIPLICATION);
-	registerObject(multiplication, "\\cdot");
+	defs.registerBaseObject(multiplication, "\\cdot");
 
-	BinaryOperator* division = new BinaryOperator(RStar_set, R_set, [](Object* o) {
+	BinaryOperator* division = new BinaryOperator(R2Star_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
 		Number* n1 = (Number*)t->objects[0];
@@ -122,9 +180,9 @@ void SlateDefinitions::load() {
 		output->value = *n1 / *n2;
 		return output;
 	}, DIVISION);
-	registerObject(division, "\\div");
+	defs.registerBaseObject(division, "\\div");
 
-	Function* division_fraction = new Function(RStar_set, R_set, [](Object* o) {
+	Function* division_fraction = new Function(R2Star_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
 		Number* n1 = (Number*)t->objects[0];
@@ -132,7 +190,7 @@ void SlateDefinitions::load() {
 		output->value = *n1 / *n2;
 		return output;
 	});
-	registerObject(division_fraction, "\\frac");
+	defs.registerBaseObject(division_fraction, "\\frac");
 
 	Function* power = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		//static Number* output = new Number(0);
@@ -141,18 +199,19 @@ void SlateDefinitions::load() {
 		Number* n2 = (Number*)t->objects[1];
 		return new Number(std::pow(*n1,*n2));
 	}, POWER);
-	registerObject(power, "^");
+	defs.registerBaseObject(power, "^");
 
 	Function*  sqrt = new Function(RPositive, R_set, [](Object* o) {
 		return new Number(std::sqrt(*((Number*)o)));
 	});
-	defaultDefinitions["\\sqrt"] = sqrt;
-	registerObject(sqrt, "\\sqrt");
+	defs.registerBaseObject(sqrt, "\\sqrt");
 
 	Function* setCategoryBinding_func = new BinaryOperator(AllSets2_set, AllSets_set, [](Object* o) {
 		Tuple* t = (Tuple*)o;
 		BiCategory* cat = new BiCategory((*t)[0], (*t)[1]);
 		return cat;
 	}, SET_BINDING);
+
+	return defs;
 
 }

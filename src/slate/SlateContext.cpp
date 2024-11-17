@@ -231,18 +231,41 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 
 
 bool SlateContext::nameExists(std::string& name) {
-	return definitions.find(name) != definitions.end() || defaultDefinitions->find(name) != defaultDefinitions->end();
+	return defaultDefinitions.objectExists(name) || definitions.objectExists(name);
 }
 
 Object* SlateContext::getObject(std::string& name) {
-	if (definitions.find(name) != definitions.end()) return definitions[name];
-	if (defaultDefinitions->find(name) != defaultDefinitions->end()) return (*defaultDefinitions)[name];
-	return nullptr;
+	if (defaultDefinitions.objectExists(name)) return defaultDefinitions.getObject(name);
+	return definitions.getObject(name);
 }
 
-void SlateContext::addDefinition(std::string& name, Object* object) {
-	definitions[name] = object;
+std::string SlateContext::getObjectName(Object* o) {
+	if (defaultDefinitions.objectHasString(o)) {
+		return defaultDefinitions.getString(o);
+	}
+	if (definitions.objectHasString(o)) {
+		return definitions.getString(o);
+	}
+	switch (o->type) {
+		case Types::NUMBER: {
+			return std::to_string(((Number*)o)->value);
+		}
+		case Types::TUPLE: {
+			Tuple* t = (Tuple*)o;
+			std::string out = "(";
+			for (size_t i = 0; i < t->length; i++) {
+				out += getObjectName((*t)[i]);
+				if (i != t->length - 1) out += ",";
+			}
+			out += ")";
+			return out;
+		}
+		default: {
+			return "<" + Types::getTypeName(o->type) + ">";
+		}
+	}
 }
+
 
 ExpressionInfo SlateContext::newExpression() {
 	expresions.push_back(new std::string(""));
@@ -252,7 +275,6 @@ ExpressionInfo SlateContext::newExpression() {
 std::vector<Object*> SlateContext::processSyntax() {
 	// TODO: clean memory
 	definitions.clear();
-	names.clear();
 	std::vector<Object*> results;
 	for (std::string* s : expresions) {
 		results.push_back(processSyntaxLine(*s));
@@ -283,6 +305,30 @@ bool isClosedBracket(ObjectSyntaxWrapper* wrapper) {
 // TODO, implement isOperand
 bool isOperand(ObjectSyntaxWrapper* wrapper) {
 	return !isOperator(wrapper) && !isOpenBracket(wrapper) && !isClosedBracket(wrapper);
+}
+
+void pushOverride(StringLocation location, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
+	for (size_t i = 0; i < tokenOverrides.size(); i++) {
+		StringLocation ol = tokenOverrides[i].location;
+		if (location == ol) {
+			tokenList.push_back(tokenOverrides[i]);
+			tokenOverrides.erase(tokenOverrides.begin() + i);
+			return;
+		}
+	}
+}
+
+void pushToken(Token t, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
+	StringLocation l = t.location;
+	for (size_t i = 0; i < tokenOverrides.size(); i++) {
+		StringLocation ol = tokenOverrides[i].location;
+		if (l == ol) {
+			tokenList.push_back(tokenOverrides[i]);
+			tokenOverrides.erase(tokenOverrides.begin() + i);
+			return;
+		}
+	}
+	tokenList.push_back(t);
 }
 
 void SlateContext::lexer(std::string& line, std::vector<Token>& tokens) {
@@ -463,7 +509,7 @@ void SlateContext::linkTokensToObjects(std::string line, std::vector<Token>& tok
 			else if (name == "," || name == "}") {
 				objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
 			}
-			else if (nameExists(name = normaliseName(name))) {
+			else if (nameExists(name = SlateDefinitions::normaliseName(name))) {
 
 				Object* o = getObject(name);
 				// If the next token is the begining of a scope and the object linked to the current token is a function
@@ -629,30 +675,6 @@ Object* SlateContext::processSyntaxLine(std::string& line) {
 	if (syOut.size() != 0 && syOut[0]->type == SyntaxWrapperTypes::KNOWN) return ((Known*)syOut[0])->o;
 	return nullptr;
 
-}
-
-void pushOverride(StringLocation location, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
-	for (size_t i = 0; i < tokenOverrides.size(); i++) {
-		StringLocation ol = tokenOverrides[i].location;
-		if (location == ol) {
-			tokenList.push_back(tokenOverrides[i]);
-			tokenOverrides.erase(tokenOverrides.begin() + i);
-			return;
-		}
-	}
-}
-
-void pushToken(Token t, std::vector<Token>& tokenList, std::vector<Token>& tokenOverrides) {
-	StringLocation l = t.location;
-	for (size_t i = 0; i < tokenOverrides.size(); i++) {
-		StringLocation ol = tokenOverrides[i].location;
-		if (l == ol) {
-			tokenList.push_back(tokenOverrides[i]);
-			tokenOverrides.erase(tokenOverrides.begin() + i);
-			return;
-		}
-	}
-	tokenList.push_back(t);
 }
 
 // TODO: The whole next section doesn't have the appropriate memory ownership setting, so its riddled with memory leaks, so maybe do that in the future
@@ -1020,10 +1042,10 @@ void SlateContext::parser(std::vector<ObjectSyntaxWrapper*>& wrappers) {
 					SyntaxWrapperType t1 = w1->type;
 					SyntaxWrapperType t2 = w2->type;
 					if (t1 == SyntaxWrapperTypes::UNKNOWN && t2 == SyntaxWrapperTypes::KNOWN) {
-						addDefinition(((Unknown*)w1)->name, ((Known*)w2)->o);
+						definitions.registerDefinition(((Unknown*)w1)->name, ((Known*)w2)->o);
 					}
 					else if (t2 == SyntaxWrapperTypes::UNKNOWN && t1 == SyntaxWrapperTypes::KNOWN) {
-						addDefinition(((Unknown*)w2)->name, ((Known*)w1)->o);
+						definitions.registerDefinition(((Unknown*)w2)->name, ((Known*)w1)->o);
 					}
 				}
 			}
