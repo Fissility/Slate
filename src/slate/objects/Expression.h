@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Object.h"
+#include "tuple/Tuple.h"
 #include <functional>
 
 /*
@@ -13,19 +14,19 @@ class Expression : public Object {
 public:
 
 	size_t numberOfVariables;
-	std::function<Object* (Object**)> evalFunc;
+	std::function<Object* (Tuple*)> evalFunc;
 
 	bool hasInverse = false;
-	std::function<void(Object*, Object*[])> reverseFunc;
+	std::function<void(Tuple* (Object*))> reverseFunc;
 
-	Expression(size_t numberOfVariables, std::function<Object* (Object**)> evalFunc) {
+	Expression(size_t numberOfVariables, std::function<Object* (Tuple*)> evalFunc) {
 		this->type = Types::EXPRESSION;
 		this->numberOfVariables = numberOfVariables;
 		this->evalFunc = evalFunc;
 		this->hasInverse = false;
 	}
 
-	Expression(size_t numberOfVariables, std::function<Object* (Object**)> evalFunc, std::function<void(Object*, Object* [])> reverseFunc) {
+	Expression(size_t numberOfVariables, std::function<Object* (Tuple*)> evalFunc, std::function<Tuple* (Object*)> reverseFunc) {
 		this->type = Types::EXPRESSION;
 		this->numberOfVariables = numberOfVariables;
 		this->evalFunc = evalFunc;

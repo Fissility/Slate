@@ -22,16 +22,16 @@ private:
 
 	std::vector<std::string*> expresions;
 
-	Tuple*		join	(Object* o1, Object* o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel);
-	Known*		join_kk	(Known* k1, Known* k2, size_t commaLevel);
-	Dependent*	join_uu	(Unknown* u1, Unknown* u2, size_t commaLevel);
-	Dependent*	join_dd	(Dependent* d1, Dependent* d2, size_t commaLevel);
-	Dependent*	join_uk	(Unknown* u, Known* k, size_t commaLevel);
-	Dependent*	join_ku	(Known* k, Unknown* u, size_t commaLevel);
-	Dependent*	join_ud	(Unknown* u, Dependent* d, size_t commaLevel);
-	Dependent*	join_du	(Dependent* d, Unknown* u, size_t commaLevel);
-	Dependent*	join_kd	(Known* k, Dependent* d, size_t commaLevel);
-	Dependent*	join_dk	(Dependent* d, Known* k, size_t commaLevel);
+	Tuple*		join	(Object*	o1, Object*		o2, size_t nestingLevel1, size_t nestingLevel2, size_t currentLevel);
+	Known*		join_kk	(Known*		k1, Known*		k2, size_t commaLevel);
+	Dependent*	join_uu	(Unknown*	u1, Unknown*	u2, size_t commaLevel);
+	Dependent*	join_dd	(Dependent* d1, Dependent*	d2, size_t commaLevel);
+	Dependent*	join_uk	(Unknown*	u,	Known*		k,	size_t commaLevel);
+	Dependent*	join_ku	(Known*		k,	Unknown*	u,	size_t commaLevel);
+	Dependent*	join_ud	(Unknown*	u,	Dependent*	d,	size_t commaLevel);
+	Dependent*	join_du	(Dependent* d,	Unknown*	u,	size_t commaLevel);
+	Dependent*	join_kd	(Known*		k,	Dependent*	d,	size_t commaLevel);
+	Dependent*	join_dk	(Dependent* d,	Known*		k,	size_t commaLevel);
 	ObjectSyntaxWrapper* joinObjects(ObjectSyntaxWrapper* left, ObjectSyntaxWrapper* right, size_t commaLevel = SIZE_MAX);
 
 	Known*		func_k(Known* func, Known* k, bool isBinary);

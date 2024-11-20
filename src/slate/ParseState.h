@@ -122,13 +122,11 @@ public:
 		this->exp = exp;
 		this->location = location;
 	}
-	void addDependecy(Unknown* u) {
+	void setDependecies(Unknown* u) {
 		depedencies.push_back(u);
 	}
-	void addAllDependeciesFrom(Dependent* d) {
-		for (Unknown* u : d->depedencies) {
-			addDependecy(u);
-		}
+	void setDependecies(std::vector<Unknown*> deps) {
+		this->depedencies = deps;
 	}
 	size_t uknownsCount() {
 		return depedencies.size();

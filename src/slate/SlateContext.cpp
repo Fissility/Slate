@@ -715,6 +715,78 @@ Tuple* SlateContext::join(Object* o1, Object* o2, size_t nestingLevel1, size_t n
 	return t;
 }
 
+std::string processJoinString(std::string left, std::string right, size_t commaLevelLeft, size_t commaLevelRight, size_t commaLevel) {
+	std::string s = "(";
+	if (commaLevelLeft == commaLevel && left[0] == '(' && left[left.size() - 1] == ')') {
+		s += left.substr(1, left.size() - 2);
+	}
+	else s += left;
+	s += ",";
+	if (commaLevelRight == commaLevel && right[0] == '(' && right[right.size() - 1] == ')') {
+		s += right.substr(1, right.size() - 2);
+	}
+	else s += right;
+	s += ")";
+	return s;
+}
+
+size_t indexOfUnknown(Unknown* u, std::vector<Unknown*>& us) {
+	for (size_t i = 0; i < us.size(); i++) {
+		if (us[i]->name == u->name) return i;
+	}
+	return us.size();
+}
+
+bool unknownIn(Unknown* u, std::vector<Unknown*>& us) {
+	return indexOfUnknown(u, us) != us.size();
+}
+
+std::vector<Unknown*> joinUnknowns(std::vector<Unknown*> first, std::vector<Unknown*> second) {
+	std::vector<Unknown*> res = first;
+	for (size_t i = 0; i < second.size(); i++) {
+		if (!unknownIn(second[i],res)) res.push_back(second[i]);
+	}
+	return res;
+}
+
+std::vector<Unknown*> joinUnknowns(std::vector<Unknown*> first, Unknown* second) {
+	std::vector<Unknown*> res = first;
+	if (!unknownIn(second,res)) res.push_back(second);
+	return res;
+}
+
+std::vector<Unknown*> joinUnknowns(Unknown* first, Unknown* second) {
+	std::vector<Unknown*> res;
+	res.push_back(first);
+	if (first->name != second->name) res.push_back(second);
+	return res;
+}
+
+std::vector<size_t*>* calculateSwaps(std::vector<Unknown*> deps, std::vector<Unknown*>& order) {
+	std::vector<size_t*>* swaps = new std::vector<size_t*>();
+	for (size_t i = 0; i < order.size(); i++) {
+		size_t from = indexOfUnknown(order[i], deps);
+		if (from != i) {
+			swaps->push_back(new size_t[]{i,from});
+			Unknown* temp = deps[i];
+			deps[i] = deps[from];
+			deps[from] = temp;
+		}
+	}
+	return swaps;
+}
+
+std::vector<size_t*>* calculateSwaps(std::vector<Unknown*> deps, Unknown* order) {
+	std::vector<size_t*>* swaps = new std::vector<size_t*>();
+	size_t from = indexOfUnknown(order, deps);
+	if (from != 0) swaps->push_back(new size_t[]{ 0,from });
+	return swaps;
+}
+
+void applySwaps(Tuple* t, std::vector<size_t*>& swaps) {
+	for (size_t* swap : swaps) t->swap(swap[0], swap[1]);
+}
+
 Known* SlateContext::join_kk(Known* k1, Known* k2, size_t commaLevel) {
 	// Only one that doesn't perform some function compositions only returns a known value equal to the tuple of the two
 	return new Known(
@@ -730,18 +802,24 @@ Known* SlateContext::join_kk(Known* k1, Known* k2, size_t commaLevel) {
 Dependent* SlateContext::join_uu(Unknown* u1, Unknown* u2, size_t commaLevel) {
 	size_t nestingLevelU1 = u1->nestingLevel;
 	size_t nestingLevelU2 = u2->nestingLevel;
+
+	std::vector<Unknown*> deps = joinUnknowns(u1, u2);
+	std::vector<size_t*>* swaps = calculateSwaps(deps, u2);
+
 	Expression* exp = new Expression(1, 
-	[=](Object* o[]) { // Eval
-		return join(o[0], o[1], nestingLevelU1, nestingLevelU2, commaLevel);
+	[=](Tuple* t) { // Eval
+		Object* first = (*t)[0];
+		applySwaps(t, *swaps);
+		Object* second = (*t)[0];
+
+		return join((*t)[0], (*t)[1], nestingLevelU1, nestingLevelU2, commaLevel);
 	},
-	[=](Object* o,Object* r[]) { // Inverse
-		r[0] = (*(Tuple*)o)[0];
-		r[1] = (*(Tuple*)o)[1];
+	[=](Object* o) { // Inverse
+		return new Tuple(2,new Object * [] {(*(Tuple*)o)[0],(*(Tuple*)o)[1]});
 	});
-	definitions.registerString(exp, "(" + u1->name + "," + u2->name + ")");
+	definitions.registerString(exp, processJoinString(u1->name, u2->name, nestingLevelU1, nestingLevelU2, commaLevel));
 	Dependent* dep = new Dependent(exp, { u1->location.begin,u2->location.end }, commaLevel);
-	dep->addDependecy(u1);
-	dep->addDependecy(u2);
+	dep->setDependecies(deps);
 	return dep;
 }
 
@@ -758,7 +836,7 @@ Dependent* SlateContext::join_dd(Dependent* d1, Dependent* d2, size_t commaLevel
 	Expression* expD1 = d1->exp;
 	Expression* expD2 = d2->exp;
 	Expression* exp = new Expression(unknownsCountD1 + unknownsCountD2, 
-	[=](Object* o[]) { // Eval
+	[=](Tuple* t) { // Eval
 		return join(expD1->evalFunc(&o[0]), expD2->evalFunc(&o[unknownsCountD1]), nestingLevelD1, nestingLevelD2, commaLevel);
 	},
 	[=](Object* o, Object* r[]) { // Inverse
@@ -771,7 +849,7 @@ Dependent* SlateContext::join_dd(Dependent* d1, Dependent* d2, size_t commaLevel
 		expD1->reverseFunc(&t1, &r[0]);
 		expD2->reverseFunc(&t2, &r[unknownsCountD1]);
 	});
-	definitions.registerString(exp, "(" + getObjectName(expD1) + "," + getObjectName(expD2) + ")");
+	definitions.registerString(exp, processJoinString(getObjectName(expD1), getObjectName(expD2), nestingLevelD1, nestingLevelD2, commaLevel));
 	Dependent* dep = new Dependent(exp, { d1->location.begin,d2->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d1);
 	dep->addAllDependeciesFrom(d2);
@@ -790,7 +868,7 @@ Dependent* SlateContext::join_uk(Unknown* u, Known* k, size_t commaLevel) {
 	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[0];
 	});
-	definitions.registerString(exp, "(" + u->name + "," + getObjectName(ko) + ")");
+	definitions.registerString(exp, processJoinString(u->name, getObjectName(ko), nestingLevelU, nestingLevelK, commaLevel));
 	Dependent* dep = new Dependent(exp, { u->location.begin,k->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
@@ -806,7 +884,7 @@ Dependent* SlateContext::join_ku(Known* k, Unknown* u, size_t commaLevel) {
 	[=](Object* o, Object* r[]) {
 		r[0] = (*(Tuple*)o)[1];
 	});
-	definitions.registerString(exp, "(" + getObjectName(ko) + "," + u->name + ")");
+	definitions.registerString(exp, processJoinString(getObjectName(ko), u->name, nestingLevelK, nestingLevelU, commaLevel));
 	Dependent* dep = new Dependent(exp, { k->location.begin,u->location.end }, commaLevel);
 	dep->addDependecy(u);
 	return dep;
@@ -830,7 +908,7 @@ Dependent* SlateContext::join_ud(Unknown* u, Dependent* d, size_t commaLevel) {
 		r[0] = (*t)[0];
 		expD->reverseFunc(&t1, &r[1]);
 	});
-	definitions.registerString(exp, "(" + u->name + "," + getObjectName(expD) + ")");
+	definitions.registerString(exp, processJoinString(u->name, getObjectName(expD), nestingLevelU, nestingLevelD, commaLevel));
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addDependecy(u);
 	dep->addAllDependeciesFrom(d);
@@ -853,7 +931,7 @@ Dependent* SlateContext::join_du(Dependent* d, Unknown* u, size_t commaLevel) {
 		r[dUnknownsCount] = (*t)[t->length-1];
 		expD->reverseFunc(&t1, &r[0]);
 	});
-	definitions.registerString(exp, "(" + getObjectName(expD) + "," + u->name + ")");
+	definitions.registerString(exp, processJoinString(getObjectName(expD), u->name, nestingLevelD, nestingLevelU, commaLevel));
 	Dependent* dep = new Dependent(exp, { u->location.begin,d->location.end }, commaLevel);
 	dep->addAllDependeciesFrom(d);
 	dep->addDependecy(u);
@@ -984,7 +1062,7 @@ Dependent* SlateContext::func_d(Known* func, Dependent* d,bool isBinary) {
 			if (expName[i] == ',' && scopeIndex == 1) {
 				std::string left = expName.substr(1, i - 1);
 				std::string right = expName.substr(i + 1, expName.size() - (i+1) - 1);
-				definitions.registerString(exp, "(" + left + getObjectName(f) + right + ")");
+				definitions.registerString(exp, "(" + left + getObjectName(f) + " " + right + ")");
 				break;
 			}
 		}

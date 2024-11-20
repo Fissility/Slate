@@ -139,8 +139,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	BinaryOperator* addition = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
 			Tuple* t = (Tuple*)o;
-			Number* n1 = (Number*)t->objects[0];
-			Number* n2 = (Number*)t->objects[1];
+			Number* n1 = (Number*)(*t)[0];
+			Number* n2 = (Number*)(*t)[1];
 			return (Object*)(new Number(*n1 + *n2));
 		}
 		return (Object*)(new Number(*((Number*)o)));
@@ -152,8 +152,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	BinaryOperator* subtraction = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
 			Tuple* t = (Tuple*)o;
-			Number* n1 = (Number*)t->objects[0];
-			Number* n2 = (Number*)t->objects[1];
+			Number* n1 = (Number*)(*t)[0];
+			Number* n2 = (Number*)(*t)[1];
 			return (Object*)(new Number(*n1 - *n2));
 		}
 		return (Object*)(new Number(-*((Number*)o)));
@@ -165,8 +165,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	BinaryOperator*  multiplication = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
+		Number* n1 = (Number*)(*t)[0];
+		Number* n2 = (Number*)(*t)[1];
 		output->value = *n1 * *n2;
 		return output;
 	},MULTIPLICATION);
@@ -175,8 +175,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	BinaryOperator* division = new BinaryOperator(R2Star_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
+		Number* n1 = (Number*)(*t)[0];
+		Number* n2 = (Number*)(*t)[1];
 		output->value = *n1 / *n2;
 		return output;
 	}, DIVISION);
@@ -185,8 +185,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	Function* division_fraction = new Function(R2Star_set, R_set, [](Object* o) {
 		static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
+		Number* n1 = (Number*)(*t)[0];
+		Number* n2 = (Number*)(*t)[1];
 		output->value = *n1 / *n2;
 		return output;
 	});
@@ -195,8 +195,8 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	Function* power = new BinaryOperator(R2_set, R_set, [](Object* o) {
 		//static Number* output = new Number(0);
 		Tuple* t = (Tuple*)o;
-		Number* n1 = (Number*)t->objects[0];
-		Number* n2 = (Number*)t->objects[1];
+		Number* n1 = (Number*)(*t)[0];
+		Number* n2 = (Number*)(*t)[1];
 		return new Number(std::pow(*n1,*n2));
 	}, POWER);
 	defs.registerBaseObject(power, "^");
