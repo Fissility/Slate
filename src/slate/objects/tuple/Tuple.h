@@ -19,13 +19,6 @@ public:
 		this->objects = os;
 	}
 
-	void swap(size_t first, size_t second) {
-		Object* o = objects[first];
-		objects[first] = objects[second];
-		objects[second] = o;
-
-	}
-
 	Object* get(size_t index) {
 		return objects[index];
 	}

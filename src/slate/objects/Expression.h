@@ -16,22 +16,10 @@ public:
 	size_t numberOfVariables;
 	std::function<Object* (Tuple*)> evalFunc;
 
-	bool hasInverse = false;
-	std::function<void(Tuple* (Object*))> reverseFunc;
-
 	Expression(size_t numberOfVariables, std::function<Object* (Tuple*)> evalFunc) {
 		this->type = Types::EXPRESSION;
 		this->numberOfVariables = numberOfVariables;
 		this->evalFunc = evalFunc;
-		this->hasInverse = false;
-	}
-
-	Expression(size_t numberOfVariables, std::function<Object* (Tuple*)> evalFunc, std::function<Tuple* (Object*)> reverseFunc) {
-		this->type = Types::EXPRESSION;
-		this->numberOfVariables = numberOfVariables;
-		this->evalFunc = evalFunc;
-		this->reverseFunc = reverseFunc;
-		this->hasInverse = true;
 	}
 
 };
