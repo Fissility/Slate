@@ -40,6 +40,7 @@ struct Definitions {
 	void clear();
 };
 
+// Holds the set of symbols and default definitions for initialising a context
 namespace SlateDefinitions {
 	
 	extern std::vector<std::string> symbolBases;
