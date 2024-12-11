@@ -68,11 +68,11 @@ void Definitions::registerDefinition(std::string& name, Object* o) {
 	definitions[normaliseName(name)] = o;
 }
 
-bool Definitions::objectExists(std::string& name) {
+bool Definitions::definitionExists(std::string& name) {
 	return definitions.find(normaliseName(name)) != definitions.end();
 }
 
-Object* Definitions::getObject(std::string& name) {
+Object* Definitions::getDefinition(std::string& name) {
 	return definitions[normaliseName(name)];
 }
 
@@ -85,6 +85,7 @@ bool Definitions::objectHasString(Object* o) {
 }
 
 std::string Definitions::getString(Object* o) {
+	if (!objectHasString(o)) return "\\mathrm{[Object cannot be displayed]}";
 	return stringValues[o];
 }
 

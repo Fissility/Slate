@@ -124,6 +124,15 @@ public:
 
 };
 
+class CompileFunctionMissingArguments : public SlateError {
+public:
+
+	CompileFunctionMissingArguments(size_t b, size_t e) : SlateError(b, e) {
+		info = std::format("Function at {}-{} has no arguments.", locationBegin, locationEnd);
+	}
+
+};
+
 class RuntimeDomainException : public SlateError {
 public:
 
