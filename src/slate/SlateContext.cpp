@@ -136,7 +136,7 @@ Object* SlateContext::processSyntaxLine(std::string line) {
 	Lexer::lexer(line, definitions, tokens);
 
 	AST::Node* output = Parser::parser(tokens);
-
+	AST::printNode(output, definitions);
 	if (output->type == AST::NodeTypes::MARKER && ((AST::Marker*)output)->marker == Lexer::MarkerTypes::EQUALS) {
 		AST::Node* left = output->tail[0];
 		AST::Node* right = output->tail[1];

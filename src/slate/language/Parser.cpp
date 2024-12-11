@@ -25,6 +25,7 @@ int precedence(Token* wrapper) {
 	if (isOperator(wrapper)) {
 		KnownToken* k = (KnownToken*)wrapper;
 		if (k->kind == KnownKinds::OPERATOR) return INT_MAX;
+		if (k->kind == KnownKinds::BINARY_OPERATOR_UNARY) return INT_MAX - 1;
 		if (k->kind == KnownKinds::BINARY_OPERATOR) {
 			return ((BinaryOperator*)((KnownToken*)wrapper)->o)->precedence;
 		}
@@ -94,6 +95,11 @@ void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 	}
 }
 
+bool isUnaryForm(Token* t) {
+	if (t->type != TokenTypes::KNOWN) return false;
+	return ((KnownToken*)t)->kind == KnownKinds::BINARY_OPERATOR_UNARY;
+}
+
 SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrappers) {
 	std::vector<Token*> operators;
 	std::vector<AST::Node*> output;
@@ -106,6 +112,7 @@ SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrap
 			while (
 				!empty(operators) &&
 				isOperator(operators.back()) &&
+				!(isUnaryForm(object) && isUnaryForm(operators.back())) &&
 				precedence(object) <= precedence(operators.back())
 				) {
 
@@ -137,25 +144,26 @@ SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrap
 void SlateLanguage::AST::printNode(Node* n, Definitions& definitions, size_t spaces) {
 	for (size_t i = 0; i < spaces; i++) std::cout << "  ";
 	switch (n->type) {
-	case NodeTypes::F: {
-		std::cout << "F Node " << "(" + definitions.getString(((FNode*)n)->function) + ")\n";
-		break;
+		case NodeTypes::F: {
+			std::cout << "F Node " << "(" + definitions.getString(((FNode*)n)->function) + ")\n";
+			break;
+		}
+		case NodeTypes::J: {
+			std::cout << "J Node\n";
+			break;
+		}
+		case NodeTypes::C: {
+			std::cout << "C Node " << "(" + definitions.getString(((CNode*)n)->constant) + ")\n";
+			break;
+		}
+		case NodeTypes::U: {
+			std::cout << "U Node " << "(\"" + ((UNode*)n)->name + "\")\n";
+			break;
+		}
+		case NodeTypes::MARKER: {
+			std::cout << "MARKER\n";
+			break;
+		}
 	}
-	case NodeTypes::J: {
-		std::cout << "J Node\n";
-		break;
-	}
-	case NodeTypes::C: {
-		std::cout << "C Node " << "(" + definitions.getString(((CNode*)n)->constant) + ")\n";
-		break;
-	}
-	case NodeTypes::U: {
-		std::cout << "U Node " << "(\"" + ((UNode*)n)->name + "\")\n";
-		break;
-	}
-	default:
-		break;
-
-		for (Node* t : n->tail) printNode(t, definitions, spaces + 1);
-	}
+	for (Node* t : n->tail) printNode(t, definitions, spaces + 1);
 }
