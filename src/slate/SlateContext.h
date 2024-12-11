@@ -13,7 +13,7 @@ class SlateContext {
 private:
 
 	std::string displayStringFromAST(SlateLanguage::AST::Node* head);
-	Expression* expressionFromAST(SlateLanguage::AST::Node* head, std::vector<std::string>& unknowns);
+	Expression* expressionFromAST(SlateLanguage::AST::Node* head, std::vector<std::string>* unknowns);
 
 public:
 

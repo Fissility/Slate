@@ -9,7 +9,8 @@ namespace SlateLanguage {
 				J, // JOIN
 				Q, // REVERSE JOIN
 				C, // CONSTANT
-				U  // UNKNOWN
+				U,  // UNKNOWN
+				MARKER
 			};
 		}
 
@@ -20,6 +21,15 @@ namespace SlateLanguage {
 			NodeType type;
 			std::vector<Node*> head;
 			std::vector<Node*> tail;
+		};
+
+		class Marker : public Node {
+		public:
+			SlateLanguage::Lexer::MarkerType marker;
+			Marker(SlateLanguage::Lexer::MarkerType marker) {
+				this->type = NodeTypes::MARKER;
+				this->marker = marker;
+			}
 		};
 
 		class FNode : public Node {
@@ -70,25 +80,6 @@ namespace SlateLanguage {
 
 	namespace Parser {
 
-		namespace ContextCalls {
-			enum ContextCalls {
-				RESULT,
-				ADD_DEFINITION
-			};
-		}
-
-		typedef size_t ContextCall;
-
-		class ParserOutput {
-		public:
-			ContextCall call;
-			std::vector<AST::Node*> nodes;
-			ParserOutput(ContextCall call, std::vector<AST::Node*> nodes) {
-				this->call = call;
-				this->nodes = nodes;
-			}
-		};
-
-		extern ParserOutput parser(std::vector<SlateLanguage::Lexer::ObjectSyntaxWrapper*>& wrappers);
+		extern AST::Node* parser(std::vector<SlateLanguage::Lexer::Token*>& wrappers);
 	}
 }

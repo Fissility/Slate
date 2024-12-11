@@ -9,9 +9,9 @@ using namespace SlateLanguage::Lexer;
 using namespace SlateLanguage::AST;
 
 // TODO, implement precedence function
-int precedence(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
-		switch (((Marker*)wrapper)->mType) {
+int precedence(Token* wrapper) {
+	if (wrapper->type == TokenTypes::MARKER) {
+		switch (((MarkerToken*)wrapper)->mType) {
 		case MarkerTypes::EQUALS:
 			return INT_MIN;
 		case MarkerTypes::COLON:
@@ -23,18 +23,18 @@ int precedence(ObjectSyntaxWrapper* wrapper) {
 		}
 	}
 	if (isOperator(wrapper)) {
-		Known* k = (Known*)wrapper;
+		KnownToken* k = (KnownToken*)wrapper;
 		if (k->kind == KnownKinds::OPERATOR) return INT_MAX;
 		if (k->kind == KnownKinds::BINARY_OPERATOR) {
-			return ((BinaryOperator*)((Known*)wrapper)->o)->precedence;
+			return ((BinaryOperator*)((KnownToken*)wrapper)->o)->precedence;
 		}
 	}
 	return 0;
 }
 
-void pushOperatorToOutput(std::vector<Node*>& output, ObjectSyntaxWrapper* op) {
+void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 	if (isFunction(op)) {
-		FNode* fnode = new FNode((Function*)((Known*)op)->o);
+		FNode* fnode = new FNode((Function*)((KnownToken*)op)->o);
 		fnode->tail.push_back(output.back());
 		output.back()->head.push_back(fnode);
 		output.pop_back();
@@ -42,7 +42,7 @@ void pushOperatorToOutput(std::vector<Node*>& output, ObjectSyntaxWrapper* op) {
 	}
 	if (isBinaryOperator(op)) {
 		if (output.size() < 2) throw CompileFloatingOperator(op->location.begin, op->location.end);
-		FNode* fnode = new FNode((Function*)((Known*)op)->o);
+		FNode* fnode = new FNode((Function*)((KnownToken*)op)->o);
 		JNode* jnode = new JNode(1);
 		Node* right = output.back(); output.pop_back();
 		Node* left = output.back(); output.pop_back();
@@ -79,17 +79,29 @@ void pushOperatorToOutput(std::vector<Node*>& output, ObjectSyntaxWrapper* op) {
 			output.push_back(jnode);
 
 		}
+	} else if (op->type == TokenTypes::MARKER) {
+		Marker* mnode = new Marker(((MarkerToken*)op)->mType);
+
+		Node* right = output.back(); output.pop_back();
+		Node* left = output.back(); output.pop_back();
+		mnode->tail.push_back(left);
+		left->head.push_back(mnode);
+
+		mnode->tail.push_back(right);
+		right->head.push_back(mnode);
+
+		output.push_back(mnode);
 	}
 }
 
-SlateLanguage::Parser::ParserOutput SlateLanguage::Parser::parser(std::vector<ObjectSyntaxWrapper*>&wrappers) {
-	std::vector<ObjectSyntaxWrapper*> operators;
+SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrappers) {
+	std::vector<Token*> operators;
 	std::vector<AST::Node*> output;
 
-	for (ObjectSyntaxWrapper* object : wrappers) {
+	for (Token* object : wrappers) {
 
-		if (isConstant(object)) output.push_back(new AST::CNode(((Known*)object)->o));
-		else if (isUnknown(object)) output.push_back(new AST::UNode(((Unknown*)object)->name));
+		if (isConstant(object)) output.push_back(new AST::CNode(((KnownToken*)object)->o));
+		else if (isUnknown(object)) output.push_back(new AST::UNode(((UnknownToken*)object)->name));
 		else if (isOperator(object)) {
 			while (
 				!empty(operators) &&
@@ -118,7 +130,8 @@ SlateLanguage::Parser::ParserOutput SlateLanguage::Parser::parser(std::vector<Ob
 		pushOperatorToOutput(output, operators.back());
 		operators.pop_back();
 	}
-	return ParserOutput(ContextCalls::RESULT, output);
+	if (!output.empty()) return output[0];
+	return nullptr;
 }
 
 void SlateLanguage::AST::printNode(Node* n, Definitions& definitions, size_t spaces) {

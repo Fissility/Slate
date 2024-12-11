@@ -3,61 +3,61 @@
 
 using namespace SlateLanguage::Tokenizer;
 
-bool SlateLanguage::Lexer::isOperator(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type == SyntaxWrapperTypes::MARKER) {
-		Marker* marker = ((Marker*)wrapper);
+bool SlateLanguage::Lexer::isOperator(Token* wrapper) {
+	if (wrapper->type == TokenTypes::MARKER) {
+		MarkerToken* marker = ((MarkerToken*)wrapper);
 		if (marker->mType == MarkerTypes::EQUALS || marker->mType == MarkerTypes::COLON || marker->mType == MarkerTypes::COMMA) return true;
 	}
-	if (wrapper->type == SyntaxWrapperTypes::KNOWN) {
-		Known* i = (Known*)wrapper;
+	if (wrapper->type == TokenTypes::KNOWN) {
+		KnownToken* i = (KnownToken*)wrapper;
 		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR;
 	}
 	return false;
 }
 
-bool SlateLanguage::Lexer::isOpenBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->mType == MarkerTypes::BEGIN_SCOPE;
+bool SlateLanguage::Lexer::isOpenBracket(Token* wrapper) {
+	return wrapper->type == TokenTypes::MARKER && ((MarkerToken*)wrapper)->mType == MarkerTypes::BEGIN_SCOPE;
 }
 
-bool SlateLanguage::Lexer::isClosedBracket(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::MARKER && ((Marker*)wrapper)->mType == MarkerTypes::END_SCOPE;
+bool SlateLanguage::Lexer::isClosedBracket(Token* wrapper) {
+	return wrapper->type == TokenTypes::MARKER && ((MarkerToken*)wrapper)->mType == MarkerTypes::END_SCOPE;
 }
 
-bool SlateLanguage::Lexer::isFunction(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type != SyntaxWrapperTypes::KNOWN) return false;
-	return((Known*)wrapper)->kind == KnownKinds::OPERATOR;
+bool SlateLanguage::Lexer::isFunction(Token* wrapper) {
+	if (wrapper->type != TokenTypes::KNOWN) return false;
+	return((KnownToken*)wrapper)->kind == KnownKinds::OPERATOR;
 }
 
 // TODO, implement isOperand
-bool SlateLanguage::Lexer::isOperand(ObjectSyntaxWrapper* wrapper) {
+bool SlateLanguage::Lexer::isOperand(Token* wrapper) {
 	return !isOperator(wrapper) && !isOpenBracket(wrapper) && !isClosedBracket(wrapper);
 }
 
-bool SlateLanguage::Lexer::isConstant(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type != SyntaxWrapperTypes::KNOWN) return false;
-	return((Known*)wrapper)->kind == KnownKinds::OPERAND;
+bool SlateLanguage::Lexer::isConstant(Token* wrapper) {
+	if (wrapper->type != TokenTypes::KNOWN) return false;
+	return((KnownToken*)wrapper)->kind == KnownKinds::OPERAND;
 }
 
-bool SlateLanguage::Lexer::isUnknown(ObjectSyntaxWrapper* wrapper) {
-	return wrapper->type == SyntaxWrapperTypes::UNKNOWN;
+bool SlateLanguage::Lexer::isUnknown(Token* wrapper) {
+	return wrapper->type == TokenTypes::UNKNOWN;
 }
 
-bool SlateLanguage::Lexer::isComma(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type != SyntaxWrapperTypes::MARKER) return false;
-	return((Marker*)wrapper)->mType == MarkerTypes::COMMA;
+bool SlateLanguage::Lexer::isComma(Token* wrapper) {
+	if (wrapper->type != TokenTypes::MARKER) return false;
+	return((MarkerToken*)wrapper)->mType == MarkerTypes::COMMA;
 }
 
-bool SlateLanguage::Lexer::isEquals(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type != SyntaxWrapperTypes::MARKER) return false;
-	return((Marker*)wrapper)->mType == MarkerTypes::EQUALS;
+bool SlateLanguage::Lexer::isEquals(Token* wrapper) {
+	if (wrapper->type != TokenTypes::MARKER) return false;
+	return((MarkerToken*)wrapper)->mType == MarkerTypes::EQUALS;
 }
 
-bool SlateLanguage::Lexer::isBinaryOperator(ObjectSyntaxWrapper* wrapper) {
-	if (wrapper->type != SyntaxWrapperTypes::KNOWN) return false;
-	return((Known*)wrapper)->kind == KnownKinds::BINARY_OPERATOR;
+bool SlateLanguage::Lexer::isBinaryOperator(Token* wrapper) {
+	if (wrapper->type != TokenTypes::KNOWN) return false;
+	return((KnownToken*)wrapper)->kind == KnownKinds::BINARY_OPERATOR;
 }
 
-void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std::vector<ObjectSyntaxWrapper*>& objects) {
+void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std::vector<Token*>& objects) {
 	std::vector<SlateLanguage::Tokenizer::BasicToken> basicTokens;
 
 	tokenizer(line, basicTokens);
@@ -86,7 +86,7 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 					else pastDot = true;
 				}
 				double result = wholeTotal * dotPlace;
-				objects.push_back(new Known(new Number(result), KnownKinds::OPERAND, token.location, nestingLevel));
+				objects.push_back(new KnownToken(new Number(result), KnownKinds::OPERAND, token.location, nestingLevel));
 				break;
 			}
 			case BasicTokenTypes::SYMBOL: {
@@ -94,14 +94,14 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 				std::string name = line.substr(token.location.begin, token.location.end - token.location.begin);
 
 				if (name == "=") {
-					objects.push_back(new Marker(MarkerTypes::EQUALS, token.location, nestingLevel));
+					objects.push_back(new MarkerToken(MarkerTypes::EQUALS, token.location, nestingLevel));
 
 				}
 				else if (name == ":") {
-					objects.push_back(new Marker(MarkerTypes::COLON, token.location, nestingLevel));
+					objects.push_back(new MarkerToken(MarkerTypes::COLON, token.location, nestingLevel));
 				}
 				else if (name == "," || name == "}") {
-					objects.push_back(new Marker(MarkerTypes::COMMA, token.location, nestingLevel));
+					objects.push_back(new MarkerToken(MarkerTypes::COMMA, token.location, nestingLevel));
 				}
 				else if (definitions.definitionExists(name)) {
 
@@ -111,7 +111,7 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 					// V V
 					// f (...)
 					if (i != basicTokens.size() - 1 && basicTokens[i + 1].type == BasicTokenTypes::BEGIN_SCOPE && o->type == Types::FUNCTION) {
-						objects.push_back(new Known(definitions.getDefinition(name), KnownKinds::OPERATOR, token.location, nestingLevel));
+						objects.push_back(new KnownToken(definitions.getDefinition(name), KnownKinds::OPERATOR, token.location, nestingLevel));
 					}
 					else if (o->type == Types::BINARY_OPERATOR) {
 						KnownKind kind;
@@ -126,19 +126,19 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 						else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
 
 
-						objects.push_back(new Known(definitions.getDefinition(name), kind, token.location, nestingLevel));
+						objects.push_back(new KnownToken(definitions.getDefinition(name), kind, token.location, nestingLevel));
 					}
 					// Otherwise if it is a function then it used as an operand (f+g,f-g,f\\circ g) or it isn't a function in which case it is a variable
 					else {
-						objects.push_back(new Known(definitions.getDefinition(name), KnownKinds::OPERAND, token.location, nestingLevel));
+						objects.push_back(new KnownToken(definitions.getDefinition(name), KnownKinds::OPERAND, token.location, nestingLevel));
 					}
 				}
 				else {
-					Unknown* u = new Unknown(name, token.location, nestingLevel);
+					UnknownToken* u = new UnknownToken(name, token.location, nestingLevel);
 					if (i != basicTokens.size() - 1 && basicTokens[i + 1].type == BasicTokenTypes::BEGIN_SCOPE) {
 						u->canBeFunctionOrExpression = true;
 					}
-					objects.push_back(new Unknown(name, token.location, nestingLevel));
+					objects.push_back(new UnknownToken(name, token.location, nestingLevel));
 				}
 				break;
 			}
@@ -148,9 +148,9 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 				// If a function is not followed by ( as in, f(..) then it is assumed that the function is not evaluated here
 				// and instead it is treated as an operand, for example f+g, f-g, f \circ g
 				if (!objects.empty()) {
-					ObjectSyntaxWrapper* ow = objects.back();
-					if (ow->type == SyntaxWrapperTypes::KNOWN) {
-						Known* ind = (Known*)ow;
+					Token* ow = objects.back();
+					if (ow->type == TokenTypes::KNOWN) {
+						KnownToken* ind = (KnownToken*)ow;
 						Object* o = ind->o;
 						if (o->type == Types::FUNCTION) {
 							ind->kind = KnownKinds::OPERATOR;
@@ -158,11 +158,11 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 					}
 				}
 
-				objects.push_back(new Marker(MarkerTypes::BEGIN_SCOPE, token.location, nestingLevel));
+				objects.push_back(new MarkerToken(MarkerTypes::BEGIN_SCOPE, token.location, nestingLevel));
 				break;
 			}
 			case BasicTokenTypes::END_SCOPE: {
-				objects.push_back(new Marker(MarkerTypes::END_SCOPE, token.location, nestingLevel));
+				objects.push_back(new MarkerToken(MarkerTypes::END_SCOPE, token.location, nestingLevel));
 				break;
 			}
 		}

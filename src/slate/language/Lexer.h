@@ -5,10 +5,9 @@
 
 namespace SlateLanguage {
 	namespace Lexer {
-		namespace SyntaxWrapperTypes {
+		namespace TokenTypes {
 			enum SyntaxWrapperTypes {
 				KNOWN,
-				DEPENDENT,
 				UNKNOWN,
 				MARKER
 			};
@@ -24,20 +23,20 @@ namespace SlateLanguage {
 			};
 		}
 
-		typedef size_t SyntaxWrapperType;
+		typedef size_t TokenType;
 		typedef size_t MarkerType;
 
-		class ObjectSyntaxWrapper {
+		class Token {
 
 		public:
 
-			SyntaxWrapperType type;
+			TokenType type;
 			// This is needed for error throwing so in the later stages errors can still point to a location in the initial string
 			size_t nestingLevel = 0;
 
 			StringLocation location;
 
-			ObjectSyntaxWrapper(SyntaxWrapperType type, size_t nestingLevel) {
+			Token(TokenType type, size_t nestingLevel) {
 				this->type = type;
 				this->nestingLevel = nestingLevel;
 			}
@@ -54,14 +53,14 @@ namespace SlateLanguage {
 
 		typedef size_t KnownKind;
 
-		class Known : public ObjectSyntaxWrapper {
+		class KnownToken : public Token {
 		public:
 
 			Object* o;
 
 			KnownKind kind;
 
-			Known(Object* o, KnownKind kind, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::KNOWN, nestingLevel) {
+			KnownToken(Object* o, KnownKind kind, StringLocation location, size_t nestingLevel) : Token(TokenTypes::KNOWN, nestingLevel) {
 				this->o = o;
 				this->kind = kind;
 				this->location = location;
@@ -69,14 +68,14 @@ namespace SlateLanguage {
 
 		};
 
-		class Unknown : public ObjectSyntaxWrapper {
+		class UnknownToken : public Token {
 
 		public:
 
 			std::string name;
 			bool canBeFunctionOrExpression = false;
 
-			Unknown(std::string name, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::UNKNOWN, nestingLevel) {
+			UnknownToken(std::string name, StringLocation location, size_t nestingLevel) : Token(TokenTypes::UNKNOWN, nestingLevel) {
 				this->name = name;
 				this->location = location;
 			}
@@ -84,12 +83,12 @@ namespace SlateLanguage {
 		};
 
 		// Not quite operators
-		class Marker : public ObjectSyntaxWrapper {
+		class MarkerToken : public Token {
 		public:
 
 			MarkerType mType;
 
-			Marker(MarkerType mType, StringLocation location, size_t nestingLevel) : ObjectSyntaxWrapper(SyntaxWrapperTypes::MARKER, nestingLevel) {
+			MarkerToken(MarkerType mType, StringLocation location, size_t nestingLevel) : Token(TokenTypes::MARKER, nestingLevel) {
 				this->mType = mType;
 				this->location = location;
 			}
@@ -97,17 +96,17 @@ namespace SlateLanguage {
 		};
 
 
-		extern bool isOperator(ObjectSyntaxWrapper* wrapper);
-		extern bool isOpenBracket(ObjectSyntaxWrapper* wrapper);
-		extern bool isClosedBracket(ObjectSyntaxWrapper* wrapper);
-		extern bool isOperand(ObjectSyntaxWrapper* wrapper);
-		extern bool isConstant(ObjectSyntaxWrapper* wrapper);
-		extern bool isUnknown(ObjectSyntaxWrapper* wrapper);
-		extern bool isFunction(ObjectSyntaxWrapper* wrapper);
-		extern bool isComma(ObjectSyntaxWrapper* wrapper);
-		extern bool isEquals(ObjectSyntaxWrapper* wrapper);
-		extern bool isBinaryOperator(ObjectSyntaxWrapper* wrapper);
+		extern bool isOperator(Token* wrapper);
+		extern bool isOpenBracket(Token* wrapper);
+		extern bool isClosedBracket(Token* wrapper);
+		extern bool isOperand(Token* wrapper);
+		extern bool isConstant(Token* wrapper);
+		extern bool isUnknown(Token* wrapper);
+		extern bool isFunction(Token* wrapper);
+		extern bool isComma(Token* wrapper);
+		extern bool isEquals(Token* wrapper);
+		extern bool isBinaryOperator(Token* wrapper);
 
-		extern void lexer(std::string line, Definitions& definitions, std::vector<ObjectSyntaxWrapper*>& objects);
+		extern void lexer(std::string line, Definitions& definitions, std::vector<Token*>& objects);
 	}
 }
