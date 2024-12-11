@@ -10,7 +10,7 @@ bool SlateLanguage::Lexer::isOperator(Token* wrapper) {
 	}
 	if (wrapper->type == TokenTypes::KNOWN) {
 		KnownToken* i = (KnownToken*)wrapper;
-		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR;
+		return i->kind == KnownKinds::OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR || i->kind == KnownKinds::BINARY_OPERATOR_UNARY;
 	}
 	return false;
 }
@@ -25,7 +25,7 @@ bool SlateLanguage::Lexer::isClosedBracket(Token* wrapper) {
 
 bool SlateLanguage::Lexer::isFunction(Token* wrapper) {
 	if (wrapper->type != TokenTypes::KNOWN) return false;
-	return((KnownToken*)wrapper)->kind == KnownKinds::OPERATOR;
+	return((KnownToken*)wrapper)->kind == KnownKinds::OPERATOR || ((KnownToken*)wrapper)->kind == KnownKinds::BINARY_OPERATOR_UNARY;
 }
 
 // TODO, implement isOperand
@@ -116,14 +116,25 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 					else if (o->type == Types::BINARY_OPERATOR) {
 						KnownKind kind;
 						if (objects.empty() || (!isOperand(objects.back()) && !isClosedBracket(objects.back()))) {
-							if (((BinaryOperator*)definitions.getDefinition(name))->canBeUnary && i != basicTokens.size() - 1 && (basicTokens[i + 1].type == BasicTokenTypes::SYMBOL || basicTokens[i + 1].type == BasicTokenTypes::NUMERICAL_CONSTANT)) {
-								kind = KnownKinds::OPERATOR;
+							if (((BinaryOperator*)definitions.getDefinition(name))->canBeUnary &&
+								(
+								i != basicTokens.size() - 1 && (
+									basicTokens[i + 1].type == BasicTokenTypes::SYMBOL ||
+									basicTokens[i + 1].type == BasicTokenTypes::NUMERICAL_CONSTANT)
+								) ||
+								objects.empty() ||
+								(i != 0 && objects.back()->type == TokenTypes::MARKER)
+							)
+							{
+								kind = KnownKinds::BINARY_OPERATOR_UNARY;
 							}
 							else {
 								kind = KnownKinds::OPERAND;
 							}
 						}
-						else kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
+						else {
+							kind = KnownKinds::BINARY_OPERATOR; // It means it is an operator
+						}
 
 
 						objects.push_back(new KnownToken(definitions.getDefinition(name), kind, token.location, nestingLevel));

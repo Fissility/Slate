@@ -47,6 +47,7 @@ namespace SlateLanguage {
 			enum KnownKinds {
 				OPERATOR,
 				BINARY_OPERATOR,
+				BINARY_OPERATOR_UNARY,
 				OPERAND
 			};
 		}

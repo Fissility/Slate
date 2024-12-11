@@ -34,15 +34,6 @@ public:
 
 };
 
-class CompileUnclosedSubscript : public SlateError {
-public:
-
-	CompileUnclosedSubscript(size_t b, size_t e) :SlateError(b, e) {
-		info = std::format("Unclosed symbol subscript at {}-{}", locationBegin, locationEnd);
-	}
-
-};
-
 class CompileEmptyFlare : public SlateError {
 public:
 
@@ -52,29 +43,20 @@ public:
 
 };
 
-class CompileUnclosedFlare : public SlateError {
+class CompileUnclosedGroup : public SlateError {
 public:
 
-	CompileUnclosedFlare(size_t b, size_t e) :SlateError(b, e) {
-		info = std::format("Unclosed flare at {}-{}", locationBegin, locationEnd);
+	CompileUnclosedGroup(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Group starting at {}-{} is not closed.", locationBegin, locationEnd);
 	}
 
 };
 
-class CompileBracketNotClosed : public SlateError {
+class CompileUnopenedGroup : public SlateError {
 public:
 
-	CompileBracketNotClosed(size_t b, size_t e) :SlateError(b, e) {
-		info = std::format("Bracket not closed for {}-{}", locationBegin, locationEnd);
-	}
-
-};
-
-class CompileBracketNotOpened : public SlateError {
-public:
-
-	CompileBracketNotOpened(size_t b, size_t e) :SlateError(b, e) {
-		info = std::format("Bracket not opened for {}-{}", locationBegin, locationEnd);
+	CompileUnopenedGroup(size_t b, size_t e) :SlateError(b, e) {
+		info = std::format("Group ending at {}-{} was never opened", locationBegin, locationEnd);
 	}
 
 };
@@ -132,6 +114,8 @@ public:
 	}
 
 };
+
+
 
 class RuntimeDomainException : public SlateError {
 public:

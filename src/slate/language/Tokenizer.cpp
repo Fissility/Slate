@@ -110,15 +110,50 @@ bool iterateOverBrackets(std::string& line, size_t& start) {
 	char s;
 	bool ignoreNext = false; // Used to ignore things like \{ \} which represent the actual characters and now TeX syntax
 	while (openCount != 0) {
+		if (start >= line.size()) return false;
 		s = line[++start];
 		if (s == '{' && !ignoreNext) openCount++;
 		if (s == '}' && !ignoreNext) openCount--;
 		ignoreNext = false;
 		if (s == '\\') ignoreNext = true;
-		if (start >= line.size()) return false;
 	}
 	start++;
 	return true;
+}
+
+bool isGroupClosed(std::string& line, size_t index) {
+	return iterateOverBrackets(line, index);
+}
+
+bool isGroupOpened(std::string& line, size_t index) {
+	size_t openCount = 1;
+	char s;
+	bool ignoreNext = false;
+	while (openCount != 0) {
+		if (index == 0) return false;
+		s = line[--index];
+		if (s == '{' && !ignoreNext) openCount--;
+		if (s == '}' && !ignoreNext) openCount++;
+		ignoreNext = false;
+		if (s == '\\') ignoreNext = true;
+	}
+	return true;
+}
+
+bool doesLeftEnd(std::string& line, size_t index) {
+	size_t count = 1;
+	while (count != 0) {
+		if (isEnd(line, index)) return false;
+		std::string n = peek(line, index);
+		if (n == "\\left") count++;
+		if (n == "\\right") count--;
+		jump(line, index);
+	}
+	return true;
+}
+
+bool doesRightStart(std::string& line, size_t index) {
+	return true; // TODO: implement this
 }
 
 // gotta love TeX
@@ -136,9 +171,9 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 	// up until the closing bracket is reached
 	if (peek(line, i) == "{") {
 		begin = jump(line, i);
-		if (isEnd(line, i)) throw CompileUnclosedSubscript(begin, i);
+		if (isEnd(line, i)) throw CompileUnclosedGroup(begin, i);
 		if (peek(line, i) == "}") throw CompileEmptySubscript(begin, i);
-		if (!iterateOverBrackets(line, i)) throw CompileUnclosedSubscript(begin, i);
+		if (!iterateOverBrackets(line, i)) throw CompileUnclosedGroup(begin, i);
 	}
 	// Check if the subscript is done using [...]_\left([...]\right)
 	// Does not also check if there is a bracket after it as that would not be valid TeX
@@ -147,7 +182,7 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 		bool passedRight = false;
 		bool finished = false;
 		while (!finished) {
-			if (isEnd(line, i)) throw CompileUnclosedSubscript(begin, i);
+			if (isEnd(line, i)) throw CompileUnclosedGroup(begin, i);
 			if (passedRight) {
 				if (peek(line, i) == ")") finished = true;
 				else throw CompileOutOfPlace(begin, i);
@@ -163,9 +198,9 @@ void processSubscript(std::string& line, size_t& i, size_t begin) {
 			if (isEnd(line, i)) throw CompileEmptyFlare(begin, i);
 			if (peek(line, i) == "{") {
 				begin = jump(line, i);
-				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, i);
+				if (isEnd(line, i)) throw CompileUnclosedGroup(begin, i);
 				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, i);
-				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, i);
+				if (!iterateOverBrackets(line, i)) throw CompileUnclosedGroup(begin, i);
 			}
 			else {
 				if (isEnd(line, i)) throw CompileEmptyFlare(begin, i);
@@ -263,6 +298,7 @@ void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicTok
 		if (current == "{") {
 			begin = jump(line, i);
 			end = i;
+			if (!isGroupClosed(line, begin)) throw CompileUnclosedGroup(begin, end);
 			pushOverride({ begin,end }, tokens, tokenOverrides);
 			continue;
 		}
@@ -270,7 +306,22 @@ void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicTok
 		if (current == "}") {
 			begin = jump(line, i);
 			end = i;
+			if (!isGroupOpened(line, begin)) throw CompileUnopenedGroup(begin, end);
 			pushOverride({ begin,end }, tokens, tokenOverrides);
+			continue;
+		}
+
+		if (current == "\\left") {
+			begin = jump(line, i);
+			end = i;
+			if (!doesLeftEnd(line, end)) throw CompileUnclosedGroup(begin, end);
+			continue;
+		}
+
+		if (current == "\\right") {
+			begin = jump(line, i);
+			end = i;
+			if (!doesRightStart(line, begin)) throw CompileUnopenedGroup(begin, end);
 			continue;
 		}
 
@@ -313,7 +364,7 @@ void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicTok
 						throw CompileControlSequenceFunctionNotEnoughArguments(localBegin, localEnd);
 					}
 					if (next == "}") {
-						if (scopeIndex == 0) throw CompileBracketNotOpened(localBegin, localEnd);
+						if (scopeIndex == 0) throw CompileUnopenedGroup(localBegin, localEnd);
 						scopeIndex--;
 						if (scopeIndex == 0) {
 							remainingCtrlSqArguments--;
@@ -349,9 +400,9 @@ void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicTok
 			if (peek(line, i) == "{") {
 				jump(line, i);
 				end = i;
-				if (isEnd(line, i)) throw CompileUnclosedFlare(begin, end);
+				if (isEnd(line, i)) throw CompileUnclosedGroup(begin, end);
 				if (peek(line, i) == "}") throw CompileEmptyFlare(begin, end);
-				if (!iterateOverBrackets(line, i)) throw CompileUnclosedFlare(begin, end);
+				if (!iterateOverBrackets(line, i)) throw CompileUnclosedGroup(begin, end);
 				end = i;
 			}
 			else {

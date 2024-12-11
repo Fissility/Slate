@@ -34,8 +34,17 @@ void SlateDefinitions::loadSymbols() {
 	dumpDictToMap("slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
 }
 
+std::string replace(std::string in, std::string sequence, std::string replace) {
+	while (in.find(sequence) != -1) {
+		in.replace(in.find(sequence), sequence.size(), replace);
+	}
+	return in;
+}
+
 std::string normaliseName(std::string name) {
 	std::string normal;
+	name = replace(name, "\\left", "");
+	name = replace(name, "\\right", "");
 	bool lastWasBackS = false;
 	for (size_t i = 0; i < name.size(); i++) {
 		char c = name[i];
