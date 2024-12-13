@@ -136,10 +136,12 @@ Object* SlateContext::processSyntaxLine(std::string line) {
 	Lexer::lexer(line, definitions, tokens);
 
 	AST::Node* output = Parser::parser(tokens);
-	AST::printNode(output, definitions);
-	if (output->type == AST::NodeTypes::MARKER && ((AST::Marker*)output)->marker == Lexer::MarkerTypes::EQUALS) {
-		AST::Node* left = output->tail[0];
-		AST::Node* right = output->tail[1];
+	printNode(output);
+	std::string equals = "=";
+	if (output->type == AST::NodeTypes::F && ((AST::FNode*)output)->function == definitions.getDefinition(equals)) {
+		AST::Node* tailJ = output->tail[0];
+		AST::Node* left = tailJ->tail[0];
+		AST::Node* right = tailJ->tail[1];
 		if (left->type == AST::NodeTypes::U && !hasUnknowns(right)) {
 			Expression* rightExp = expressionFromAST(right, nullptr);
 			Object* result = rightExp->evalFunc(nullptr);
@@ -147,11 +149,53 @@ Object* SlateContext::processSyntaxLine(std::string line) {
 			return result;
 		}
 	}
-	else {
-		std::vector<std::string> u;
-		return expressionFromAST(output, &u);
-	}
+	std::vector<std::string> u;
+	return expressionFromAST(output, &u);
+
 
 	return nullptr;
 
+}
+
+void SlateContext::printNode(AST::Node* n, size_t spaces) {
+	for (size_t i = 0; i < spaces; i++) std::cout << "  ";
+	switch (n->type) {
+	case AST::NodeTypes::F: {
+		std::cout << "F Node " << "(" + getObjectName(((AST::FNode*)n)->function) + ")\n";
+		break;
+	}
+	case AST::NodeTypes::J: {
+		std::cout << "J Node\n";
+		break;
+	}
+	case AST::NodeTypes::C: {
+		std::cout << "C Node " << "(" + getObjectName(((AST::CNode*)n)->constant) + ")\n";
+		break;
+	}
+	case AST::NodeTypes::U: {
+		std::cout << "U Node " << "(\"" + ((AST::UNode*)n)->name + "\")\n";
+		break;
+	}
+	case AST::NodeTypes::MARKER: {
+		std::cout << "MARKER\n";
+		break;
+	}
+	}
+	for (AST::Node* t : n->tail) printNode(t, spaces + 1);
+}
+
+bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+	return false;
+}
+
+bool SlateContext::superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::vector<std::string>& patternTemplateInputs) {
+	return false;
+}
+
+SlateLanguage::AST::Node* SlateContext::populateReplacement(SlateLanguage::AST::Node* replacement, std::vector<std::string>& patternTemplateInputs) {
+	return nullptr;
+}
+
+bool SlateContext::simplifyTree(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, SlateLanguage::AST::Node* replacement) {
+	return false;
 }

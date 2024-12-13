@@ -115,6 +115,13 @@ public:
 
 };
 
+class CompileDidNotUnderstandExpression : public SlateError {
+public:
+	CompileDidNotUnderstandExpression() : SlateError(0,0) {
+		info = "The expression could not be understood. If you see this error, then something went terribly wrong! Please report this!";
+	}
+};
+
 
 
 class RuntimeDomainException : public SlateError {

@@ -17,7 +17,6 @@ namespace SlateLanguage {
 			enum MarkerTypes {
 				BEGIN_SCOPE,
 				END_SCOPE,
-				EQUALS,
 				COLON,
 				COMMA
 			};
@@ -105,7 +104,6 @@ namespace SlateLanguage {
 		extern bool isUnknown(Token* wrapper);
 		extern bool isFunction(Token* wrapper);
 		extern bool isComma(Token* wrapper);
-		extern bool isEquals(Token* wrapper);
 		extern bool isBinaryOperator(Token* wrapper);
 
 		extern void lexer(std::string line, Definitions& definitions, std::vector<Token*>& objects);

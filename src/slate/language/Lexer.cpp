@@ -6,7 +6,7 @@ using namespace SlateLanguage::Tokenizer;
 bool SlateLanguage::Lexer::isOperator(Token* wrapper) {
 	if (wrapper->type == TokenTypes::MARKER) {
 		MarkerToken* marker = ((MarkerToken*)wrapper);
-		if (marker->mType == MarkerTypes::EQUALS || marker->mType == MarkerTypes::COLON || marker->mType == MarkerTypes::COMMA) return true;
+		if (marker->mType == MarkerTypes::COLON || marker->mType == MarkerTypes::COMMA) return true;
 	}
 	if (wrapper->type == TokenTypes::KNOWN) {
 		KnownToken* i = (KnownToken*)wrapper;
@@ -45,11 +45,6 @@ bool SlateLanguage::Lexer::isUnknown(Token* wrapper) {
 bool SlateLanguage::Lexer::isComma(Token* wrapper) {
 	if (wrapper->type != TokenTypes::MARKER) return false;
 	return((MarkerToken*)wrapper)->mType == MarkerTypes::COMMA;
-}
-
-bool SlateLanguage::Lexer::isEquals(Token* wrapper) {
-	if (wrapper->type != TokenTypes::MARKER) return false;
-	return((MarkerToken*)wrapper)->mType == MarkerTypes::EQUALS;
 }
 
 bool SlateLanguage::Lexer::isBinaryOperator(Token* wrapper) {
@@ -93,11 +88,7 @@ void SlateLanguage::Lexer::lexer(std::string line, Definitions& definitions, std
 				// Signifies it is just a name, it can either be some external varaible or a function
 				std::string name = line.substr(token.location.begin, token.location.end - token.location.begin);
 
-				if (name == "=") {
-					objects.push_back(new MarkerToken(MarkerTypes::EQUALS, token.location, nestingLevel));
-
-				}
-				else if (name == ":") {
+				if (name == ":") {
 					objects.push_back(new MarkerToken(MarkerTypes::COLON, token.location, nestingLevel));
 				}
 				else if (name == "," || name == "}") {

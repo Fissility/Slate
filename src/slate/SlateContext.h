@@ -23,4 +23,11 @@ public:
 
 	Object* processSyntaxLine(std::string line);
 
+	void printNode(SlateLanguage::AST::Node* n, size_t spaces = 0);
+
+	bool equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second);
+	bool superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::vector<std::string>& patternTemplateInputs);
+	SlateLanguage::AST::Node* populateReplacement(SlateLanguage::AST::Node* replacement, std::vector<std::string>& patternTemplateInputs);
+	bool simplifyTree(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, SlateLanguage::AST::Node* replacement);
+
 };

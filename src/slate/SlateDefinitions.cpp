@@ -1,5 +1,7 @@
 #include "SlateDefinitions.h"
 #include "objects/tuple/BiCategory.h"
+#include "language/Lexer.h"
+#include "language/Parser.h"
 #include <fstream>
 #include <cmath>
 
@@ -103,9 +105,23 @@ void Definitions::registerBaseObject(Object* o, std::string name) {
 	registerString(o, name);
 }
 
+void Definitions::registerEquivalence(Equivalence eq) {
+	equivalences.push_back(eq);
+}
+
 void Definitions::clear() {
 	definitions.clear();
 	stringValues.clear();
+}
+
+Equivalence generateEquivalence(std::string from, std::string to, Definitions& defs) {
+	std::vector<SlateLanguage::Lexer::Token*> tokens;
+	SlateLanguage::Lexer::lexer(from, defs, tokens);
+	SlateLanguage::AST::Node* nodeFrom = SlateLanguage::Parser::parser(tokens);
+	tokens.clear();
+	SlateLanguage::Lexer::lexer(to, defs, tokens);
+	SlateLanguage::AST::Node* nodeTo = SlateLanguage::Parser::parser(tokens);
+	return Equivalence(nodeFrom, nodeTo);
 }
 
 Definitions SlateDefinitions::buildDefaultDefinitions() {
@@ -145,6 +161,29 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	defs.registerBaseObject(R2Star_set, "\\mathbb{R}\\times\\mathbb{R}^*");
 
 	Set* RPositive = new IntervalSet(new Number(0), infinity, true, false);
+
+	Set* B_set = new BSet();
+
+	BinaryOperator* equals = new BinaryOperator(U2_set, B_set, [](Object* o) {
+		static Number* FALSE = new Number(0);
+		static Number* TRUE = new Number(1);
+		Tuple* t = (Tuple*)o;
+		Object* first = (*t)[0];
+		Object* second = (*t)[1];
+		if (first->type != second->type) return FALSE;
+		switch (first->type) {
+			case Types::NUMBER: {
+				if ((*(Number*)(first)) == (*((Number*)second))) return TRUE;
+				else return FALSE;
+			}
+			default: {
+				if (first == second) return TRUE;
+				else return FALSE;
+			}
+		}
+	},EQUALS);
+
+	defs.registerBaseObject(equals, "=");
 
 	BinaryOperator* addition = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {

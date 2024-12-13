@@ -12,8 +12,6 @@ using namespace SlateLanguage::AST;
 int precedence(Token* wrapper) {
 	if (wrapper->type == TokenTypes::MARKER) {
 		switch (((MarkerToken*)wrapper)->mType) {
-		case MarkerTypes::EQUALS:
-			return INT_MIN;
 		case MarkerTypes::COLON:
 			return INT_MIN + 1;
 		case MarkerTypes::COMMA:
@@ -137,33 +135,7 @@ SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrap
 		pushOperatorToOutput(output, operators.back());
 		operators.pop_back();
 	}
+	if (output.size() != 1) throw CompileDidNotUnderstandExpression();
 	if (!output.empty()) return output[0];
 	return nullptr;
-}
-
-void SlateLanguage::AST::printNode(Node* n, Definitions& definitions, size_t spaces) {
-	for (size_t i = 0; i < spaces; i++) std::cout << "  ";
-	switch (n->type) {
-		case NodeTypes::F: {
-			std::cout << "F Node " << "(" + definitions.getString(((FNode*)n)->function) + ")\n";
-			break;
-		}
-		case NodeTypes::J: {
-			std::cout << "J Node\n";
-			break;
-		}
-		case NodeTypes::C: {
-			std::cout << "C Node " << "(" + definitions.getString(((CNode*)n)->constant) + ")\n";
-			break;
-		}
-		case NodeTypes::U: {
-			std::cout << "U Node " << "(\"" + ((UNode*)n)->name + "\")\n";
-			break;
-		}
-		case NodeTypes::MARKER: {
-			std::cout << "MARKER\n";
-			break;
-		}
-	}
-	for (Node* t : n->tail) printNode(t, definitions, spaces + 1);
 }

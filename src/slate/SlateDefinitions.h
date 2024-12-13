@@ -2,7 +2,9 @@
 
 #include <vector>
 #include <string>
+#include "language/AST.h"
 #include "objects/function/Function.h"
+#include "objects/set/BSet.h"
 #include "objects/set/NSet.h"
 #include "objects/set/ZSet.h"
 #include "objects/set/QSet.h"
@@ -12,7 +14,8 @@
 #include "objects/function/BinaryOperator.h"
 
 enum Presidences {
-	ELEMENT_BINDING,
+	EQUALS = INT_MIN,
+	ELEMENT_BINDING = 0,
 	ADDITION,
 	SUBTRACTION = ADDITION,
 	MULTIPLICATION,
@@ -22,7 +25,18 @@ enum Presidences {
 	CARTESIAN
 };
 
+struct Equivalence {
+	SlateLanguage::AST::Node* from;
+	SlateLanguage::AST::Node* to;
+	Equivalence(SlateLanguage::AST::Node* from, SlateLanguage::AST::Node* to) {
+		this->from = from;
+		this->to = to;
+	}
+};
+
 struct Definitions {
+
+	std::vector<Equivalence> equivalences;
 
 	// The word definition here refers to the name - object assosciation
 	// Map of objects and the names by which they are identified
@@ -68,6 +82,8 @@ struct Definitions {
 	* @param name = The name of the object
 	*/
 	void registerBaseObject(Object* o, std::string name);
+
+	void registerEquivalence(Equivalence eq);
 
 	/*
 	* @brief Clears all definitions and display strings

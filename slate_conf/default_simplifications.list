@@ -1,0 +1,9 @@
+A+A=A\\cdot 2
+A\\cdot B+A=(B+1)\\cdot A
+B\\cdot A+A=(B+1)\\cdot A
+A+A\\cdot B=(B+1)\\cdot A
+A+B\\cdot A=(B+1)\\cdot A
+A\\cdot B+A\\cdot C=(B+C)\\cdot A
+B\\cdot A+A\\cdot C=(B+C)\\cdot A
+A\\cdot B+C\\cdot A=(B+C)\\cdot A
+B\\cdot A+C\\cdot A=(B+C)\\cdot A
