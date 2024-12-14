@@ -41,6 +41,8 @@ struct Definitions {
 	// The word definition here refers to the name - object assosciation
 	// Map of objects and the names by which they are identified
 	std::unordered_map <std::string, Object*> definitions;
+	// List of all objects that have definitions
+	std::vector<Object*> definedObjects;
 	// Map of the printable strings of some objects (i.e. not all objects are required to have a printable string stored)
 	std::unordered_map <Object*, std::string> stringValues;
 
@@ -55,6 +57,11 @@ struct Definitions {
 	* @return Returns TRUE if the name is associated with a definition, FALSE otherwise
 	*/
 	bool definitionExists(std::string& name);
+	/*
+	* @param name = The object
+	* @return Returns TRUE if there is a definition for the inputted object, FALSE otherwise
+	*/
+	bool objectHasDefinition(Object* o);
 	/*
 	* @param name = The name of the definition
 	* @return Returns the object assosciated with the definition. Returns nullptr if the definition doesn't exist.
@@ -96,6 +103,8 @@ struct Definitions {
 	void addFrom(Definitions other) {
 		definitions.insert(other.definitions.begin(),other.definitions.end());
 		stringValues.insert(other.stringValues.begin(), other.stringValues.end());
+		definedObjects.insert(definedObjects.begin(), other.definedObjects.begin(), other.definedObjects.end());
+		equivalences.insert(equivalences.begin(), other.equivalences.begin(), other.equivalences.end());
 	}
 };
 
@@ -107,6 +116,30 @@ namespace SlateDefinitions {
 	extern std::vector<std::string> controlSeqeuenceCharacters;
 	extern std::vector<std::string> binaryOperators;
 	extern std::unordered_map<std::string, std::string> controlSequenceFunctions;
+
+	extern bool equals(Object* first, Object* second);
+
+	extern bool objectIsIn(Object* o,Set* s);
+	/*
+	* @brief The union operation on two sets
+	* @return Returns a set which is the union of the two
+	*/
+	extern Set* setUnion(Set* first, Set* second);
+	/*
+	* @brief Intersection operation on two sets
+	* @return Returns a set which is the intersection of the two
+	*/
+	extern Set* setIntersection(Set*first, Set* second);
+	/*
+	* @brief Minus operation between two sets
+	* @return Returns a set which contains all elements in the first set that are not in the second set
+	*/
+	extern Set* setMinus(Set* first, Set* second);
+	/*
+	* @brief Cartesian operation between two sets
+	* @return Returns the set which is the cartesian product of the two sets
+	*/
+	extern Set* setCartesian(Set* first, Set* second);
 
 	extern void loadSymbols();
 	extern Definitions buildDefaultDefinitions();

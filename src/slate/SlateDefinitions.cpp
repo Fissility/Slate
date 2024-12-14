@@ -28,6 +28,62 @@ void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string
 	}
 }
 
+bool SlateDefinitions::equals(Object* first, Object* second) {
+	if (first->type != second->type) return false;
+	switch (first->type) {
+		case Types::NUMBER: {
+			return ((*(Number*)(first)) == (*((Number*)second)));
+		}
+		default: {
+			return first == second;
+		}
+	}
+}
+
+bool SlateDefinitions::objectIsIn(Object* o, Set* s) {
+	return s->inImpl(o);
+}
+
+Set* SlateDefinitions::setUnion(Set* first, Set* second) {
+	return new Set(
+		[=](Object* o) {
+			return objectIsIn(o,first) || objectIsIn(o,second);
+		}
+	);
+}
+
+Set* SlateDefinitions::setIntersection(Set* first, Set* second) {
+	return new Set(
+		[=](Object* o) {
+			return objectIsIn(o,first) && objectIsIn(o,second);
+		}
+	);
+}
+
+Set* SlateDefinitions::setMinus(Set* first, Set* second) {
+	return new Set(
+		[=](Object* o) {
+			return objectIsIn(o,first) && !objectIsIn(o,second);
+		}
+	);
+}
+
+Set* SlateDefinitions::setCartesian(Set* first, Set* second) {
+	Set* prod = new Set(
+		[=](Object* o) {
+			if ((o->type) != Types::TUPLE) return false;
+			Tuple* t = (Tuple*)o;
+			// For canonical tuple result of the cartesian product
+			if (t->length == 2) {
+				Object* o1 = t->get(0);
+				Object* o2 = t->get(1);
+				return objectIsIn(o1,first) && objectIsIn(o2,second);
+			}
+		}
+	);
+	return prod;
+}
+
 void SlateDefinitions::loadSymbols() {
 	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
 	dumpListToVec("slate_conf/symbol_flare.list", symbolFlares);
@@ -77,10 +133,15 @@ std::string normaliseName(std::string name) {
 
 void Definitions::registerDefinition(std::string& name, Object* o) {
 	definitions[normaliseName(name)] = o;
+	definedObjects.push_back(o);
 }
 
 bool Definitions::definitionExists(std::string& name) {
 	return definitions.find(normaliseName(name)) != definitions.end();
+}
+
+bool Definitions::objectHasDefinition(Object* o) {
+	return std::find(definedObjects.begin(),definedObjects.end(),o) != definedObjects.end();
 }
 
 Object* Definitions::getDefinition(std::string& name) {
@@ -129,9 +190,9 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	Definitions defs;
 
 	Set* AllSets_set = new AllSetsSet();
-	Set* AllSets2_set = AllSets_set->cartesian_with(AllSets_set);
+	Set* AllSets2_set = setCartesian(AllSets_set, AllSets_set);
 	Set* U_set = new USet();
-	Set* U2_set = U_set->cartesian_with(U_set);
+	Set* U2_set = setCartesian(U_set, U_set);
 	Number* infinity = new Number(DBL_MAX);
 
 	Set* N_set = new NSet();
@@ -154,38 +215,29 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	Set* RStar_set = new RStarSet();
 	defs.registerBaseObject(RStar_set, "\\mathbb{R}^*");
 
-	Set* R2_set = R_set->cartesian_with(R_set);
+	Set* R2_set = setCartesian(R_set, R_set);
 	defs.registerBaseObject(R2_set, "\\mathbb{R}^2");
 
-	Set* R2Star_set = R_set->cartesian_with(RStar_set);
+	Set* R2Star_set = setCartesian(R_set, RStar_set);
 	defs.registerBaseObject(R2Star_set, "\\mathbb{R}\\times\\mathbb{R}^*");
 
 	Set* RPositive = new IntervalSet(new Number(0), infinity, true, false);
 
 	Set* B_set = new BSet();
 
-	BinaryOperator* equals = new BinaryOperator(U2_set, B_set, [](Object* o) {
+	BinaryOperator* equalsFunc = new BinaryOperator(U2_set, B_set, [](Object* o) {
 		static Number* FALSE = new Number(0);
 		static Number* TRUE = new Number(1);
 		Tuple* t = (Tuple*)o;
 		Object* first = (*t)[0];
 		Object* second = (*t)[1];
-		if (first->type != second->type) return FALSE;
-		switch (first->type) {
-			case Types::NUMBER: {
-				if ((*(Number*)(first)) == (*((Number*)second))) return TRUE;
-				else return FALSE;
-			}
-			default: {
-				if (first == second) return TRUE;
-				else return FALSE;
-			}
-		}
+		if (equals(first, second)) return TRUE;
+		else return FALSE;
 	},EQUALS);
 
-	defs.registerBaseObject(equals, "=");
+	defs.registerBaseObject(equalsFunc, "=");
 
-	BinaryOperator* addition = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
+	BinaryOperator* addition = new BinaryOperator(setUnion(R2_set,R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
 			Tuple* t = (Tuple*)o;
 			Number* n1 = (Number*)(*t)[0];
@@ -198,7 +250,7 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 	addition->hasUnary(true);
 	defs.registerBaseObject(addition, "+");
 
-	BinaryOperator* subtraction = new BinaryOperator(R2_set->union_with(R_set), R_set, [](Object* o) {
+	BinaryOperator* subtraction = new BinaryOperator(setUnion(R2_set,R_set), R_set, [](Object* o) {
 		if (o->type == Types::TUPLE) {
 			Tuple* t = (Tuple*)o;
 			Number* n1 = (Number*)(*t)[0];
@@ -260,6 +312,20 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 		BiCategory* cat = new BiCategory((*t)[0], (*t)[1]);
 		return cat;
 	}, SET_BINDING);
+
+	std::vector<std::string> simplifications;
+	dumpListToVec("slate_conf/default_simplifications.list", simplifications);
+	for (size_t i = 0; i < simplifications.size(); i++) {
+		std::vector<SlateLanguage::Lexer::Token*> tokens;
+		SlateLanguage::Lexer::lexer(simplifications[i], defs, tokens);
+		SlateLanguage::AST::Node* simplification = SlateLanguage::Parser::parser(tokens);
+		if (simplification->type == SlateLanguage::AST::NodeTypes::F && 
+			((SlateLanguage::AST::FNode*)simplification)->function == equalsFunc) {
+			SlateLanguage::AST::Node* from = simplification->tail[0]->tail[0];
+			SlateLanguage::AST::Node* to = simplification->tail[0]->tail[1];
+			defs.registerEquivalence({ from,to });
+		}
+	}
 
 	return defs;
 

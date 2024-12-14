@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include "SlateErrors.h"
+
 #include "../objects/Object.h"
 #include "../objects/function/Function.h"
 
@@ -9,12 +11,12 @@ namespace SlateLanguage {
 	namespace AST {
 		namespace NodeTypes {
 			enum NodeTypes {
-				F, // FUNCTION
-				J, // JOIN
-				Q, // REVERSE JOIN
-				C, // CONSTANT
-				U,  // UNKNOWN
-				MARKER
+				F,		// FUNCTION
+				J,		// JOIN
+				Q,		// REVERSE JOIN
+				C,		// CONSTANT
+				U,		// UNKNOWN
+				MARKER	// MARKER
 			};
 		}
 
@@ -22,6 +24,7 @@ namespace SlateLanguage {
 
 		class Node {
 		public:
+			StringLocation debugLocation;
 			NodeType type;
 			std::vector<Node*> head;
 			std::vector<Node*> tail;
@@ -78,5 +81,7 @@ namespace SlateLanguage {
 				this->name = name;
 			}
 		};
+
+		extern Node* copyTree(Node* head);
 	}
 }

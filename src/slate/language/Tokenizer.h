@@ -2,15 +2,7 @@
 
 #include <vector>
 #include <string>
-
-struct StringLocation {
-	size_t begin;
-	size_t end;
-
-	bool operator==(const StringLocation& other) const {
-		return other.begin == begin && other.end == end;
-	}
-};
+#include "SlateErrors.h"
 
 namespace SlateLanguage {
 	namespace Tokenizer {

@@ -2,6 +2,15 @@
 
 #include <format>
 
+struct StringLocation {
+	size_t begin;
+	size_t end;
+
+	bool operator==(const StringLocation& other) const {
+		return other.begin == begin && other.end == end;
+	}
+};
+
 class SlateError : public std::exception {
 public:
 	size_t locationBegin;

@@ -100,8 +100,10 @@ std::function<Object* (Tuple*)> generateExpressionImpl(AST::Node* head, std::vec
 		Function* function = ((AST::FNode*)head)->function;
 		std::function<Object* (Tuple*)> input = tailImpls[0];
 		return [=](Tuple* t) {
-			return function->evaluate(input(t));
-			};
+			Object* result = input(t);
+			if (!SlateDefinitions::objectIsIn(result, function->domain)) throw RuntimeDomainException(head->debugLocation.begin,head->debugLocation.end);
+			return function->evaluate(result);
+		};
 	}
 	if (head->type == AST::NodeTypes::J) {
 		size_t inputSize = head->tail.size();
@@ -136,7 +138,13 @@ Object* SlateContext::processSyntaxLine(std::string line) {
 	Lexer::lexer(line, definitions, tokens);
 
 	AST::Node* output = Parser::parser(tokens);
+	AST::Node* outputCopy = AST::copyTree(output);
+	AST::Node* simpl = simplifyTree(outputCopy);
+
 	printNode(output);
+	std::cout << "\n";
+	if (simpl != nullptr) printNode(simpl);
+
 	std::string equals = "=";
 	if (output->type == AST::NodeTypes::F && ((AST::FNode*)output)->function == definitions.getDefinition(equals)) {
 		AST::Node* tailJ = output->tail[0];
@@ -184,18 +192,98 @@ void SlateContext::printNode(AST::Node* n, size_t spaces) {
 	for (AST::Node* t : n->tail) printNode(t, spaces + 1);
 }
 
+bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+	if (first->type != second->type) return false;
+	if (first->tail.size() != second->tail.size()) return false;
+	switch (first->type) {
+	case AST::NodeTypes::C: {
+		AST::CNode* firstC = (AST::CNode*)first;
+		AST::CNode* secondC = (AST::CNode*)second;
+
+		// If one of the constants come from a variable which is already defined in the environment
+		// Then the nodes should only be considered the same if it is actually the same variable
+		if (definitions.objectHasDefinition(firstC->constant) || definitions.objectHasDefinition(secondC->constant)) {
+			return firstC->constant == secondC->constant;
+		}
+
+		return SlateDefinitions::equals(firstC->constant, secondC->constant);
+	}
+	case AST::NodeTypes::F: {
+		AST::FNode* firstF = (AST::FNode*)first;
+		AST::FNode* secondF = (AST::FNode*)second;
+		return SlateDefinitions::equals(firstF->function, secondF->function);
+	}
+	case AST::NodeTypes::U: {
+		AST::UNode* firstU = (AST::UNode*)first;
+		AST::UNode* secondU = (AST::UNode*)second;
+		return firstU->name == secondU->name;
+	}
+	case AST::NodeTypes::Q:
+	case AST::NodeTypes::J:
+		return true;
+	case AST::NodeTypes::MARKER: {
+		AST::Marker* firstM = (AST::Marker*)first;
+		AST::Marker* secondM = (AST::Marker*)second;
+		return firstM->marker == secondM->marker;
+	}
+	default:
+		return false;
+	}
+}
+
 bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
-	return false;
+	if (!equalsNodes(first, second)) return false;
+	for (size_t i = 0; i < first->tail.size(); i++) {
+		if (!equalsAST(first->tail[i], second->tail[i])) return false;
+	}
+	return true;
 }
 
-bool SlateContext::superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::vector<std::string>& patternTemplateInputs) {
-	return false;
+bool SlateContext::superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
+	if (inputPattern->type == AST::NodeTypes::U) {
+		std::string name = ((AST::UNode*)inputPattern)->name;
+		if (patternTemplateInputs.find(name) == patternTemplateInputs.end()) {
+			patternTemplateInputs[name] = head;
+			return true;
+		}
+		else {
+			return equalsAST(patternTemplateInputs[name], head);
+		}
+	}
+	if (!equalsNodes(head, inputPattern)) return false;
+	for (size_t i = 0; i < head->tail.size(); i++) {
+		if (!superimposePattern(head->tail[i], inputPattern->tail[i], patternTemplateInputs)) return false;
+	}
+	return true;
 }
 
-SlateLanguage::AST::Node* SlateContext::populateReplacement(SlateLanguage::AST::Node* replacement, std::vector<std::string>& patternTemplateInputs) {
+void SlateContext::populatePattern(SlateLanguage::AST::Node* pattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
+	for (size_t i = 0; i < pattern->tail.size();i++) {
+		if (pattern->tail[i]->type == AST::NodeTypes::U) {
+			std::string name = ((AST::UNode*)pattern->tail[i])->name;
+			if (patternTemplateInputs.find(name) == patternTemplateInputs.end()) throw CompileDidNotUnderstandExpression();
+			pattern->tail[i] = patternTemplateInputs[name];
+		} else {
+			populatePattern(pattern->tail[i], patternTemplateInputs);
+		}
+	}
+}
+
+SlateLanguage::AST::Node* SlateContext::simplifyTree(SlateLanguage::AST::Node* head) {
+
+	for (size_t i = 0; i < head->tail.size();i++) {
+		AST::Node* simplified;
+		while ((simplified = simplifyTree(head->tail[i])) != nullptr) head->tail[i] = simplified;
+	}
+
+	for (Equivalence eq : definitions.equivalences) {
+		std::unordered_map<std::string, SlateLanguage::AST::Node*> inputs;
+		if (superimposePattern(head, eq.from, inputs)) {
+			AST::Node* blankPattern = AST::copyTree(eq.to);
+			populatePattern(blankPattern, inputs);
+			return blankPattern;
+		}
+	}
+
 	return nullptr;
-}
-
-bool SlateContext::simplifyTree(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, SlateLanguage::AST::Node* replacement) {
-	return false;
 }

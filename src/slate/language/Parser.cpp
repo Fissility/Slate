@@ -34,6 +34,7 @@ int precedence(Token* wrapper) {
 void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 	if (isFunction(op)) {
 		FNode* fnode = new FNode((Function*)((KnownToken*)op)->o);
+		fnode->debugLocation = op->location;
 		fnode->tail.push_back(output.back());
 		output.back()->head.push_back(fnode);
 		output.pop_back();
@@ -42,6 +43,7 @@ void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 	if (isBinaryOperator(op)) {
 		if (output.size() < 2) throw CompileFloatingOperator(op->location.begin, op->location.end);
 		FNode* fnode = new FNode((Function*)((KnownToken*)op)->o);
+		fnode->debugLocation = op->location;
 		JNode* jnode = new JNode(1);
 		Node* right = output.back(); output.pop_back();
 		Node* left = output.back(); output.pop_back();
@@ -69,6 +71,7 @@ void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 		}
 		else {
 			JNode* jnode = new JNode(nestingLevel);
+			jnode->debugLocation = op->location;
 
 			jnode->tail.push_back(left);
 			left->head.push_back(jnode);
@@ -80,6 +83,7 @@ void pushOperatorToOutput(std::vector<Node*>& output, Token* op) {
 		}
 	} else if (op->type == TokenTypes::MARKER) {
 		Marker* mnode = new Marker(((MarkerToken*)op)->mType);
+		mnode->debugLocation = op->location;
 
 		Node* right = output.back(); output.pop_back();
 		Node* left = output.back(); output.pop_back();
@@ -102,26 +106,34 @@ SlateLanguage::AST::Node* SlateLanguage::Parser::parser(std::vector<Token*>&wrap
 	std::vector<Token*> operators;
 	std::vector<AST::Node*> output;
 
-	for (Token* object : wrappers) {
+	for (Token* token : wrappers) {
 
-		if (isConstant(object)) output.push_back(new AST::CNode(((KnownToken*)object)->o));
-		else if (isUnknown(object)) output.push_back(new AST::UNode(((UnknownToken*)object)->name));
-		else if (isOperator(object)) {
+		if (isConstant(token)) {
+			CNode* cnode = new AST::CNode(((KnownToken*)token)->o);
+			cnode->debugLocation = token->location;
+			output.push_back(cnode);
+		}
+		else if (isUnknown(token)) {
+			UNode* unode = new AST::UNode(((UnknownToken*)token)->name);
+			unode->debugLocation = token->location;
+			output.push_back(unode);
+		}
+		else if (isOperator(token)) {
 			while (
 				!empty(operators) &&
 				isOperator(operators.back()) &&
-				!(isUnaryForm(object) && isUnaryForm(operators.back())) &&
-				precedence(object) <= precedence(operators.back())
+				!(isUnaryForm(token) && isUnaryForm(operators.back())) &&
+				precedence(token) <= precedence(operators.back())
 				) {
 
 				pushOperatorToOutput(output, operators.back());
 				operators.pop_back();
 			}
 
-			operators.push_back(object);
+			operators.push_back(token);
 		}
-		else if (isOpenBracket(object)) operators.push_back(object);
-		else if (isClosedBracket(object)) {
+		else if (isOpenBracket(token)) operators.push_back(token);
+		else if (isClosedBracket(token)) {
 			while (!empty(operators) && !isOpenBracket(operators.back())) {
 				pushOperatorToOutput(output, operators.back());
 				operators.pop_back();
