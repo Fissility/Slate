@@ -1,6 +1,6 @@
 #include "SlateContext.h"
 #include "SlateDefinitions.h"
-#include <format>
+
 #include "language/SlateErrors.h"
 #include "language/Tokenizer.h"
 #include "language/Lexer.h"
@@ -9,6 +9,7 @@
 #include "objects/tuple/BiCategory.h" //X
 #include <iostream>
 #include <stack>
+#include "SlateType.h"
 
 using namespace SlateLanguage;
 
@@ -85,14 +86,14 @@ std::function<Object* (Tuple*)> generateExpressionImpl(AST::Node* head, std::vec
 		size_t getFrom = unknowns->size();
 		for (size_t i = 0; i < unknowns->size(); i++) {
 			if ((*unknowns)[i] == unknownName) {
-				getFrom == i;
+				getFrom = i;
 				break;
 			}
 		}
 		if (getFrom == unknowns->size()) unknowns->push_back(unknownName);
 		return [=](Tuple* t) {
 			return (*t)[getFrom];
-			};
+		};
 	}
 	std::vector<std::function<Object* (Tuple*)>> tailImpls;
 	for (AST::Node* t : head->tail) tailImpls.push_back(generateExpressionImpl(t, unknowns));

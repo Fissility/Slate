@@ -1,6 +1,9 @@
 #include "Tokenizer.h"
 #include "SlateErrors.h"
 #include "../SlateDefinitions.h"
+#include <algorithm>
+#include <iostream>
+#include <string>
 
 // Helper functions for the tokenizer
 
@@ -286,9 +289,9 @@ bool SlateLanguage::Tokenizer::isControlSequenceFunction(std::string s) {
 }
 
 void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicToken>& tokens) {
-	size_t begin = 0;
-	size_t end = 0;
-	size_t i = 0;
+  std::size_t begin = 0;
+  std::size_t end = 0;
+  std::size_t i = 0;
 
 	std::vector<BasicToken> tokenOverrides;
 

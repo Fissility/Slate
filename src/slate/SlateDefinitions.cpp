@@ -2,8 +2,11 @@
 #include "objects/tuple/BiCategory.h"
 #include "language/Lexer.h"
 #include "language/Parser.h"
+#include <cfloat>
+#include <cstdio>
 #include <fstream>
 #include <cmath>
+#include <climits>
 
 std::vector<std::string> SlateDefinitions::symbolBases;
 std::vector<std::string> SlateDefinitions::symbolFlares;
@@ -11,10 +14,29 @@ std::vector<std::string> SlateDefinitions::controlSeqeuenceCharacters;
 std::vector<std::string> SlateDefinitions::binaryOperators;
 std::unordered_map<std::string, std::string> SlateDefinitions::controlSequenceFunctions;
 
+bool getLine(std::ifstream& stream, std::string& s) {
+  if (stream.peek() == EOF) return false;
+
+  s = "";
+
+  bool found = false;
+
+  char c;
+  while (stream.peek() != EOF && stream.peek() != '\n' && stream.peek() != '\r') {
+    stream.get(c);
+    s += c;
+    found = true; 
+  }
+  
+  while (stream.peek() != EOF && (stream.peek() == '\n' || stream.peek() == '\r')) stream.get(c);
+
+  return found;
+}
+
 void dumpListToVec(std::string path,std::vector<std::string>& list) {
 	std::ifstream f(path);
 	std::string name;
-	while (std::getline(f, name)) {
+	while (getLine(f, name)) {
 		list.push_back(name);
 	}
 }
@@ -22,7 +44,7 @@ void dumpListToVec(std::string path,std::vector<std::string>& list) {
 void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string>& map) {
 	std::ifstream f(path);
 	std::string name;
-	while (std::getline(f, name)) {
+	while (getLine(f, name)) {
 		size_t sep = name.find(';');
 		map[name.substr(0, sep)] = name.substr(sep + 1, name.size() - sep - 1);
 	}
@@ -85,11 +107,11 @@ Set* SlateDefinitions::setCartesian(Set* first, Set* second) {
 }
 
 void SlateDefinitions::loadSymbols() {
-	dumpListToVec("slate_conf/symbol_base.list", symbolBases);
-	dumpListToVec("slate_conf/symbol_flare.list", symbolFlares);
-	dumpListToVec("slate_conf/ctrl_seq_characters.list", controlSeqeuenceCharacters);
-	dumpListToVec("slate_conf/binary_operators.list", binaryOperators);
-	dumpDictToMap("slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
+	dumpListToVec("./slate_conf/symbol_base.list", symbolBases);
+	dumpListToVec("./slate_conf/symbol_flare.list", symbolFlares);
+	dumpListToVec("./slate_conf/ctrl_seq_characters.list", controlSeqeuenceCharacters);
+	dumpListToVec("./slate_conf/binary_operators.list", binaryOperators);
+	dumpDictToMap("./slate_conf/ctrl_seq_function.dict", controlSequenceFunctions);
 }
 
 std::string replace(std::string in, std::string sequence, std::string replace) {
