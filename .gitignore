@@ -3,3 +3,4 @@
 *.user
 x64
 main.cpp
+*.o
