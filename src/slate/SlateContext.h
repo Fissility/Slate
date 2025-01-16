@@ -21,13 +21,13 @@ public:
 
 	std::string getObjectName(Object* o);
 
-	Object* processSyntaxLine(std::string line);
+	Object* interpret(std::string line);
 
 	void printNode(SlateLanguage::AST::Node* n, size_t spaces = 0);
 
 	bool equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second);
 	bool equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second);
-	bool superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::unordered_map<std::string,SlateLanguage::AST::Node*>& patternTemplateInputs);
+	bool checkPatternHead(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::unordered_map<std::string,SlateLanguage::AST::Node*>& patternTemplateInputs);
 	void populatePattern(SlateLanguage::AST::Node* replacement, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs);
 	SlateLanguage::AST::Node* simplifyTree(SlateLanguage::AST::Node* head);
 

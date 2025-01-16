@@ -133,7 +133,12 @@ Expression* SlateContext::expressionFromAST(AST::Node* head, std::vector<std::st
 	return exp;
 }
 
-Object* SlateContext::processSyntaxLine(std::string line) {
+/*
+ * @brief Processes and updates the context with the TeX expression offered in the inputted string.
+ * @param line = The string whicb holds the TeX expression
+ * @return Returns the relevant objects in relation to the inputted expression. The pointer can also be null if there is no relevant output (e.g. f:A->B doesn't have any relevant output)
+ */
+Object* SlateContext::interpret(std::string line) {
 
 	std::vector<Lexer::Token*> tokens;
 	Lexer::lexer(line, definitions, tokens);
@@ -193,43 +198,49 @@ void SlateContext::printNode(AST::Node* n, size_t spaces) {
 	for (AST::Node* t : n->tail) printNode(t, spaces + 1);
 }
 
+/*
+ * @brief Functions used to check wether two AST nodes are equal. There is a caviat in that if a constant node represents an entry to a variable which is stored in the environment then both constants nodes would have to point to the same object in order for any further transformations to not remove the reference from one of the two objects.
+ * @param first = First node
+ * @param second = Second node
+ * @return Returns TRUE if both nodes are equal, FALSE otherwise
+ */
 bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
 	if (first->type != second->type) return false;
 	if (first->tail.size() != second->tail.size()) return false;
 	switch (first->type) {
-	case AST::NodeTypes::C: {
-		AST::CNode* firstC = (AST::CNode*)first;
-		AST::CNode* secondC = (AST::CNode*)second;
+	  case AST::NodeTypes::C: {
+		  AST::CNode* firstC = (AST::CNode*)first;
+		  AST::CNode* secondC = (AST::CNode*)second;
 
-		// If one of the constants come from a variable which is already defined in the environment
-		// Then the nodes should only be considered the same if it is actually the same variable
-		if (definitions.objectHasDefinition(firstC->constant) || definitions.objectHasDefinition(secondC->constant)) {
-			return firstC->constant == secondC->constant;
-		}
+		  // If one of the constants comes from a variable which is already defined in the environment
+		  // Then the nodes should only be considered the same if it is actually the same variable
+		  if (definitions.objectHasDefinition(firstC->constant) || definitions.objectHasDefinition(secondC->constant)) {
+			  return firstC->constant == secondC->constant;
+		  }
 
-		return SlateDefinitions::equals(firstC->constant, secondC->constant);
-	}
-	case AST::NodeTypes::F: {
-		AST::FNode* firstF = (AST::FNode*)first;
-		AST::FNode* secondF = (AST::FNode*)second;
-		return SlateDefinitions::equals(firstF->function, secondF->function);
-	}
-	case AST::NodeTypes::U: {
-		AST::UNode* firstU = (AST::UNode*)first;
-		AST::UNode* secondU = (AST::UNode*)second;
-		return firstU->name == secondU->name;
-	}
-	case AST::NodeTypes::Q:
-	case AST::NodeTypes::J:
-		return true;
-	case AST::NodeTypes::MARKER: {
-		AST::Marker* firstM = (AST::Marker*)first;
-		AST::Marker* secondM = (AST::Marker*)second;
-		return firstM->marker == secondM->marker;
-	}
-	default:
-		return false;
-	}
+		  return SlateDefinitions::equals(firstC->constant, secondC->constant);
+	  }
+	  case AST::NodeTypes::F: {
+		  AST::FNode* firstF = (AST::FNode*)first;
+		  AST::FNode* secondF = (AST::FNode*)second;
+		  return SlateDefinitions::equals(firstF->function, secondF->function);
+	  }
+	  case AST::NodeTypes::U: {
+		  AST::UNode* firstU = (AST::UNode*)first;
+		  AST::UNode* secondU = (AST::UNode*)second;
+		  return firstU->name == secondU->name;
+	  }
+	  case AST::NodeTypes::Q:
+	  case AST::NodeTypes::J:
+		  return true;
+	  case AST::NodeTypes::MARKER: {
+		  AST::Marker* firstM = (AST::Marker*)first;
+		  AST::Marker* secondM = (AST::Marker*)second;
+		  return firstM->marker == secondM->marker;
+	  }
+	  default:
+		  return false;
+	  }
 }
 
 bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
@@ -240,7 +251,15 @@ bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST
 	return true;
 }
 
-bool SlateContext::superimposePattern(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
+
+/*
+ * @brief Firstly checks if a certain pattern holds over the inputted AST starting from the head of both. If it holds then it also populates the mapping from the pattern inputs to the inputted AST nodes.
+ * @param head = Head of the inputted AST over which the pattern will be checkPatternHead
+ * @param inputPattern = Head of the pattern AST
+ * @param patternTemplateInputs = Reference to the map in which will populated with the mappings of the pattern to the input AST's nodes if it holds
+ * @return Returns TRUE if the pattern holds, FALSE otherwise
+ */
+bool SlateContext::checkPatternHead(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* inputPattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
 	if (inputPattern->type == AST::NodeTypes::U) {
 		std::string name = ((AST::UNode*)inputPattern)->name;
 		if (patternTemplateInputs.find(name) == patternTemplateInputs.end()) {
@@ -253,7 +272,7 @@ bool SlateContext::superimposePattern(SlateLanguage::AST::Node* head, SlateLangu
 	}
 	if (!equalsNodes(head, inputPattern)) return false;
 	for (size_t i = 0; i < head->tail.size(); i++) {
-		if (!superimposePattern(head->tail[i], inputPattern->tail[i], patternTemplateInputs)) return false;
+		if (!checkPatternHead(head->tail[i], inputPattern->tail[i], patternTemplateInputs)) return false;
 	}
 	return true;
 }
@@ -270,6 +289,11 @@ void SlateContext::populatePattern(SlateLanguage::AST::Node* pattern, std::unord
 	}
 }
 
+/*
+ * @brief Converts an expression to an equivalent simplified expression AST which can be simplified directly for each function node.
+ * @param head = The head of the AST of the expression
+ * @return Returns the head of the simplified expression AST
+*/
 SlateLanguage::AST::Node* SlateContext::simplifyTree(SlateLanguage::AST::Node* head) {
 
 	for (size_t i = 0; i < head->tail.size();i++) {
@@ -277,9 +301,9 @@ SlateLanguage::AST::Node* SlateContext::simplifyTree(SlateLanguage::AST::Node* h
 		while ((simplified = simplifyTree(head->tail[i])) != nullptr) head->tail[i] = simplified;
 	}
 
-	for (Equivalence eq : definitions.equivalences) {
+	for (Simplification eq : definitions.simplifications) {
 		std::unordered_map<std::string, SlateLanguage::AST::Node*> inputs;
-		if (superimposePattern(head, eq.from, inputs)) {
+		if (checkPatternHead(head, eq.from, inputs)) {
 			AST::Node* blankPattern = AST::copyTree(eq.to);
 			populatePattern(blankPattern, inputs);
 			return blankPattern;

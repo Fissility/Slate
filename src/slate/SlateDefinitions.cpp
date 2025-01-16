@@ -1,4 +1,5 @@
 #include "SlateDefinitions.h"
+#include "language/AST.h"
 #include "objects/tuple/BiCategory.h"
 #include "language/Lexer.h"
 #include "language/Parser.h"
@@ -49,6 +50,18 @@ void dumpDictToMap(std::string path, std::unordered_map<std::string, std::string
 		map[name.substr(0, sep)] = name.substr(sep + 1, name.size() - sep - 1);
 	}
 }
+
+void dumpExpressionsToVec(std::string path, Definitions& defs, std::vector<SlateLanguage::AST::Node*>& list) {
+  std::vector<std::string> lines;
+	dumpListToVec(path, lines);
+	for (size_t i = 0; i < lines.size(); i++) {
+		std::vector<SlateLanguage::Lexer::Token*> tokens;
+		SlateLanguage::Lexer::lexer(lines[i], defs, tokens);
+		SlateLanguage::AST::Node* simplification = SlateLanguage::Parser::parser(tokens);
+    list.push_back(simplification);
+	}
+}
+
 
 bool SlateDefinitions::equals(Object* first, Object* second) {
 	if (first->type != second->type) return false;
@@ -188,8 +201,12 @@ void Definitions::registerBaseObject(Object* o, std::string name) {
 	registerString(o, name);
 }
 
-void Definitions::registerEquivalence(Equivalence eq) {
-	equivalences.push_back(eq);
+void Definitions::registerSimplification(Simplification eq) {
+	simplifications.push_back(eq);
+}
+
+void Definitions::registerProperty(Property pr) {
+  properties.push_back(pr);
 }
 
 void Definitions::clear() {
@@ -197,14 +214,14 @@ void Definitions::clear() {
 	stringValues.clear();
 }
 
-Equivalence generateEquivalence(std::string from, std::string to, Definitions& defs) {
+Simplification generateEquivalence(std::string from, std::string to, Definitions& defs) {
 	std::vector<SlateLanguage::Lexer::Token*> tokens;
 	SlateLanguage::Lexer::lexer(from, defs, tokens);
 	SlateLanguage::AST::Node* nodeFrom = SlateLanguage::Parser::parser(tokens);
 	tokens.clear();
 	SlateLanguage::Lexer::lexer(to, defs, tokens);
 	SlateLanguage::AST::Node* nodeTo = SlateLanguage::Parser::parser(tokens);
-	return Equivalence(nodeFrom, nodeTo);
+	return Simplification(nodeFrom, nodeTo);
 }
 
 Definitions SlateDefinitions::buildDefaultDefinitions() {
@@ -335,19 +352,33 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 		return cat;
 	}, SET_BINDING);
 
-	std::vector<std::string> simplifications;
-	dumpListToVec("slate_conf/default_simplifications.list", simplifications);
-	for (size_t i = 0; i < simplifications.size(); i++) {
-		std::vector<SlateLanguage::Lexer::Token*> tokens;
-		SlateLanguage::Lexer::lexer(simplifications[i], defs, tokens);
-		SlateLanguage::AST::Node* simplification = SlateLanguage::Parser::parser(tokens);
-		if (simplification->type == SlateLanguage::AST::NodeTypes::F && 
-			((SlateLanguage::AST::FNode*)simplification)->function == equalsFunc) {
+  std::vector<SlateLanguage::AST::Node*> simplifications;
+  dumpExpressionsToVec("slate_conf/default_simplifications.list", defs, simplifications);
+
+  std::vector<SlateLanguage::AST::Node*> properties;
+  dumpExpressionsToVec("slate_conf/default_properties.list", defs, properties);
+
+  for (size_t i = 0;i < simplifications.size(); i++) {
+    SlateLanguage::AST::Node* simplification = simplifications[i];
+    if (simplification->type == SlateLanguage::AST::NodeTypes::F && ((SlateLanguage::AST::FNode*)simplification)->function == equalsFunc) {
+      	
 			SlateLanguage::AST::Node* from = simplification->tail[0]->tail[0];
 			SlateLanguage::AST::Node* to = simplification->tail[0]->tail[1];
-			defs.registerEquivalence({ from,to });
-		}
-	}
+			defs.registerSimplification({ from,to });
+
+    }
+  }
+
+  for (size_t i = 0;i < properties.size(); i++) {
+    SlateLanguage::AST::Node* property = properties[i];
+    if (property->type == SlateLanguage::AST::NodeTypes::F && ((SlateLanguage::AST::FNode*)property)->function == equalsFunc) {
+      	
+			SlateLanguage::AST::Node* from = property->tail[0]->tail[0];
+			SlateLanguage::AST::Node* to = property->tail[0]->tail[1];
+			defs.registerProperty({ from,to });
+
+    }
+  }
 
 	return defs;
 

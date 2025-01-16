@@ -27,10 +27,21 @@ enum Presidences {
   CARTESIAN
 };
 
-struct Equivalence {
-  SlateLanguage::AST::Node *from;
-  SlateLanguage::AST::Node *to;
-  Equivalence(SlateLanguage::AST::Node *from, SlateLanguage::AST::Node *to) {
+// Simplifications when applied to an expression yields it closer to having every function node being inversible in one step.
+struct Simplification {
+  SlateLanguage::AST::Node* from;
+  SlateLanguage::AST::Node* to;
+  Simplification(SlateLanguage::AST::Node *from, SlateLanguage::AST::Node *to) {
+    this->from = from;
+    this->to = to;
+  }
+};
+
+// Properties when applied to an expression do not change its complexity but merely shuffle elements around.
+struct Property {
+  SlateLanguage::AST::Node* from;
+  SlateLanguage::AST::Node* to;
+  Property(SlateLanguage::AST::Node* from, SlateLanguage::AST::Node* to) {
     this->from = from;
     this->to = to;
   }
@@ -38,16 +49,16 @@ struct Equivalence {
 
 struct Definitions {
 
-  std::vector<Equivalence> equivalences;
-
+  std::vector<Simplification> simplifications;
+  std::vector<Property> properties;
   // The word definition here refers to the name - object assosciation
   // Map of objects and the names by which they are identified
-  std::unordered_map<std::string, Object *> definitions;
+  std::unordered_map<std::string, Object*> definitions;
   // List of all objects that have definitions
-  std::vector<Object *> definedObjects;
+  std::vector<Object*> definedObjects;
   // Map of the printable strings of some objects (i.e. not all objects are
   // required to have a printable string stored)
-  std::unordered_map<Object *, std::string> stringValues;
+  std::unordered_map<Object*, std::string> stringValues;
 
   /*
    * @brief Adds a new definition.
@@ -98,7 +109,8 @@ struct Definitions {
    */
   void registerBaseObject(Object *o, std::string name);
 
-  void registerEquivalence(Equivalence eq);
+  void registerSimplification(Simplification eq);
+  void registerProperty(Property pr);
 
   /*
    * @brief Clears all definitions and display strings
@@ -114,7 +126,8 @@ struct Definitions {
     definitions.insert(other.definitions.begin(), other.definitions.end());
     stringValues.insert(other.stringValues.begin(), other.stringValues.end());
     definedObjects.insert(definedObjects.begin(), other.definedObjects.begin(),other.definedObjects.end());
-    equivalences.insert(equivalences.begin(), other.equivalences.begin(),other.equivalences.end());
+    simplifications.insert(simplifications.begin(), other.simplifications.begin(),other.simplifications.end());
+    properties.insert(properties.begin(), other.properties.begin(), other.properties.end());
   }
 };
 
