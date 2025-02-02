@@ -439,7 +439,9 @@ void SlateLanguage::Tokenizer::tokenizer(std::string& line, std::vector<BasicTok
 			tokens.push_back(BasicToken(BasicTokenTypes::END_SCOPE, begin, end));
 			continue;
 		}
-
+    
+    begin = jump(line,i);
+    end = i;
 		throw CompileOutOfPlace(begin, end);
 	}
 }

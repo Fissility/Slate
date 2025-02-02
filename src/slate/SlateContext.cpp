@@ -1,6 +1,7 @@
 #include "SlateContext.h"
 #include "SlateDefinitions.h"
 
+#include "language/AST.h"
 #include "language/SlateErrors.h"
 #include "language/Tokenizer.h"
 #include "language/Lexer.h"
@@ -8,6 +9,7 @@
 #include "objects/Expression.h"
 #include "objects/tuple/BiCategory.h" //X
 #include <iostream>
+#include <iterator>
 #include <stack>
 #include "SlateType.h"
 
@@ -58,13 +60,16 @@ std::string SlateContext::displayStringFromAST(AST::Node* head) {
 		}
 	}
 	if (head->type == AST::NodeTypes::J) {
-		if (!head->head.empty() && head->head[0]->type == AST::NodeTypes::F && ((AST::FNode*)head->head[0])->function->type == Types::BINARY_OPERATOR) {
-			return "\\left(" + tailStrings[0] + " " + getObjectName(((AST::FNode*)head->head[0])->function) + " " + tailStrings[1] + "\\right)";
+    if (!head->head.empty()) {
+      std::cout << (bool)(head->head[0]->type == AST::NodeTypes::F) << '\n';
+    }
+		if (!head->head.empty() && head->head[0]->type == AST::NodeTypes::F && ((AST::FNode*)head->head[0])->function->type == Types::BINARY_OPERATOR) { 
+			return "\\left({" + tailStrings[0] + "} " + getObjectName(((AST::FNode*)head->head[0])->function) + " {" + tailStrings[1] + "}\\right)";
 		}
 		else {
 			std::string out = "\\left(";
 			for (size_t i = 0; i < tailStrings.size(); i++) {
-				out += tailStrings[i] + " ";
+				out += "{" + tailStrings[i] + "} ";
 				if (i != tailStrings.size() - 1) out += ",";
 			}
 			out += "\\right)";
@@ -145,11 +150,17 @@ Object* SlateContext::interpret(std::string line) {
 
 	AST::Node* output = Parser::parser(tokens);
 	AST::Node* outputCopy = AST::copyTree(output);
-	AST::Node* simpl = simplifyTree(outputCopy);
 
 	printNode(output);
 	std::cout << "\n";
-	if (simpl != nullptr) printNode(simpl);
+  std::vector<AST::Node*> prv;
+  if (reduceTree(outputCopy, outputCopy, prv)) {
+    printNode(outputCopy);
+    std::vector<std::string> u;
+    std::cout << displayStringFromAST(outputCopy) << '\n';
+  } else {
+    std::cout << "Could not be simplified!\n";
+  }
 
 	std::string equals = "=";
 	if (output->type == AST::NodeTypes::F && ((AST::FNode*)output)->function == definitions.getDefinition(equals)) {
@@ -251,6 +262,17 @@ bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST
 	return true;
 }
 
+void SlateContext::swapHeads(AST::Node* target, AST::Node* source) {
+  source->head = target->head;
+  if (!target->head.empty()) {
+    for (size_t i = 0;i < target->head[0]->tail.size();i++) {
+      if (target->head[0]->tail[i] == target) {
+        target->head[0]->tail[i] = source;
+      }
+    }
+  }
+}
+
 
 /*
  * @brief Firstly checks if a certain pattern holds over the inputted AST starting from the head of both. If it holds then it also populates the mapping from the pattern inputs to the inputted AST nodes.
@@ -263,6 +285,7 @@ bool SlateContext::checkPatternHead(SlateLanguage::AST::Node* head, SlateLanguag
 	if (inputPattern->type == AST::NodeTypes::U) {
 		std::string name = ((AST::UNode*)inputPattern)->name;
 		if (patternTemplateInputs.find(name) == patternTemplateInputs.end()) {
+      //printNode(head);
 			patternTemplateInputs[name] = head;
 			return true;
 		}
@@ -277,12 +300,21 @@ bool SlateContext::checkPatternHead(SlateLanguage::AST::Node* head, SlateLanguag
 	return true;
 }
 
-void SlateContext::populatePattern(SlateLanguage::AST::Node* pattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
-	for (size_t i = 0; i < pattern->tail.size();i++) {
+void SlateContext::populatePattern(SlateLanguage::AST::Node*& pattern, std::unordered_map<std::string, SlateLanguage::AST::Node*>& patternTemplateInputs) {
+
+  if (pattern->type == AST::NodeTypes::U) {
+    // TODO: free the existing pattern
+    pattern = AST::copyTree(patternTemplateInputs[((AST::UNode*)pattern)->name]);
+    return;
+  }
+
+  for (size_t i = 0; i < pattern->tail.size();i++) {
 		if (pattern->tail[i]->type == AST::NodeTypes::U) {
 			std::string name = ((AST::UNode*)pattern->tail[i])->name;
 			if (patternTemplateInputs.find(name) == patternTemplateInputs.end()) throw CompileDidNotUnderstandExpression();
-			pattern->tail[i] = patternTemplateInputs[name];
+      AST::Node* inputCopy = AST::copyTree(patternTemplateInputs[name]);
+			pattern->tail[i] = inputCopy;
+      inputCopy->head.push_back(pattern);
 		} else {
 			populatePattern(pattern->tail[i], patternTemplateInputs);
 		}
@@ -290,25 +322,102 @@ void SlateContext::populatePattern(SlateLanguage::AST::Node* pattern, std::unord
 }
 
 /*
- * @brief Converts an expression to an equivalent simplified expression AST which can be simplified directly for each function node.
+ * @brief Converts an expression to an equivalent simplified expression by directly replacing structures which are in the simplifaction table
  * @param head = The head of the AST of the expression
  * @return Returns the head of the simplified expression AST
 */
-SlateLanguage::AST::Node* SlateContext::simplifyTree(SlateLanguage::AST::Node* head) {
+bool SlateContext::simplifyTree(SlateLanguage::AST::Node*& head) {
+  
+  bool modified = false;
 
 	for (size_t i = 0; i < head->tail.size();i++) {
 		AST::Node* simplified;
-		while ((simplified = simplifyTree(head->tail[i])) != nullptr) head->tail[i] = simplified;
+		while (simplifyTree(head->tail[i])) modified = true;
 	}
 
 	for (Simplification eq : definitions.simplifications) {
 		std::unordered_map<std::string, SlateLanguage::AST::Node*> inputs;
 		if (checkPatternHead(head, eq.from, inputs)) {
-			AST::Node* blankPattern = AST::copyTree(eq.to);
-			populatePattern(blankPattern, inputs);
-			return blankPattern;
+			AST::Node* pattern = AST::copyTree(eq.to);
+			populatePattern(pattern, inputs);
+      swapHeads(head,pattern);
+			head = pattern;
+      modified = true;
+      break;
 		}
 	}
 
-	return nullptr;
+	return modified;
+}
+size_t l = 0;
+// The looping works since it is a finite group so elements have finite order
+bool SlateContext::reduceTree(SlateLanguage::AST::Node*& top, SlateLanguage::AST::Node*& head, std::vector<AST::Node*>& previous) {
+  //std::cout << '\n';
+  //printNode(top);
+
+  for (Property pr : definitions.properties) {
+    std::unordered_map<std::string, AST::Node*> inputs;
+    if (checkPatternHead(head, pr.from, inputs)) { 
+
+      AST::Node* pattern = AST::copyTree(pr.to);
+      populatePattern(pattern, inputs);
+      
+      AST::Node* old = head;
+      swapHeads(head,pattern);
+      head = pattern; 
+
+      bool looping = false;
+      for (AST::Node* back : previous) {
+        if (equalsAST(top,back)) {
+          looping = true;
+          break;
+        }
+      }
+      
+      if (looping) {
+        swapHeads(head,old);
+        head = old;
+        continue;
+      }
+
+      previous.push_back(AST::copyTree(top));
+
+
+      if (simplifyTree(top)) {
+        std::cout << "BEEP\n";
+        std::vector<AST::Node*> prv;
+        reduceTree(top,top,prv);
+        return true;
+      }
+
+      if(reduceTree(top, head, previous)) {
+        std::cout << "BOOP\n";
+        return true;
+      }
+      
+
+      bool anyTailsReduced = false;
+
+      for (size_t i = 0;i < head->tail.size();i++) {
+        std::vector<AST::Node*> prv;
+        //std::cout << l++ << '\n';
+        if (reduceTree(top,head->tail[i],prv)) {
+          anyTailsReduced = true;
+        }
+        //std::cout << l-- << '\n';
+      }
+
+      if (anyTailsReduced) {
+        simplifyTree(pattern);
+        return true;
+      }
+
+      swapHeads(head,old);
+      head = old;
+      previous.pop_back();
+      
+    }
+  } 
+  
+  return false;
 }

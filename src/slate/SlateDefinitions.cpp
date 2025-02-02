@@ -9,6 +9,8 @@
 #include <cmath>
 #include <climits>
 
+#include <iostream>
+
 std::vector<std::string> SlateDefinitions::symbolBases;
 std::vector<std::string> SlateDefinitions::symbolFlares;
 std::vector<std::string> SlateDefinitions::controlSeqeuenceCharacters;
