@@ -15,6 +15,10 @@
 
 using namespace SlateLanguage;
 
+void SlateContext::addDefinitions(Definitions& defs) {
+  definitions.addFrom(defs);
+}
+
 std::string SlateContext::getObjectName(Object* o) {
 	if (definitions.objectHasString(o)) {
 		return definitions.getString(o);
@@ -138,6 +142,33 @@ Expression* SlateContext::expressionFromAST(AST::Node* head, std::vector<std::st
 	return exp;
 }
 
+void SlateContext::getRepetitionSignature(AST::Node* head, std::vector<AST::Node*>& subSection, std::vector<size_t>& sameCount) {
+  for (size_t i = 0;i < head->tail.size();i++) {
+    getRepetitionSignature(head->tail[i],subSection,sameCount);
+  }
+
+  for (size_t i = 0;i < subSection.size();i++) {
+    if (equalsAST(head,subSection[i])) {
+      sameCount[i]++;
+      for(size_t j = 0;j < i;j++) {
+        if (sameCount[j] < sameCount[i]) {
+          size_t temp = sameCount[j];
+          sameCount[j] = sameCount[i];
+          sameCount[i] = temp;
+          AST::Node* tempNode = subSection[j];
+          subSection[j] = subSection[i];
+          subSection[i] = tempNode;
+          break;
+        }
+      }
+      return;
+    }
+  }
+
+  subSection.push_back(head);
+  sameCount.push_back(1);
+}
+
 /*
  * @brief Processes and updates the context with the TeX expression offered in the inputted string.
  * @param line = The string whicb holds the TeX expression
@@ -160,6 +191,12 @@ Object* SlateContext::interpret(std::string line) {
     std::cout << displayStringFromAST(outputCopy) << '\n';
   } else {
     std::cout << "Could not be simplified!\n";
+  }
+  std::vector<AST::Node*> subs;
+  std::vector<size_t> counts;
+  getRepetitionSignature(output,subs,counts);
+  for (size_t i = 0;i < counts.size();i++) {
+    std::cout << counts[i] << '\n';
   }
 
 	std::string equals = "=";
