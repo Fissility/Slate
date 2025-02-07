@@ -18,6 +18,8 @@ private:
   std::unordered_map<SlateLanguage::AST::Node*,std::vector<size_t>> simplificationSignatures;
 
   bool doSignaturesMatch(std::vector<size_t>& expression, std::vector<size_t>& simplification); // TODO: Implement it
+  bool includesNode(SlateLanguage::AST::Node* node, SlateLanguage::AST::Node* pattern);
+  bool includesAllBlocks(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* pattern);
   bool maybeDoSimplification(SlateLanguage::AST::Node* head, Simplification& s); // TODO: Implement it
 
 public:

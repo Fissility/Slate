@@ -64,9 +64,6 @@ std::string SlateContext::displayStringFromAST(AST::Node* head) {
 		}
 	}
 	if (head->type == AST::NodeTypes::J) {
-    if (!head->head.empty()) {
-      std::cout << (bool)(head->head[0]->type == AST::NodeTypes::F) << '\n';
-    }
 		if (!head->head.empty() && head->head[0]->type == AST::NodeTypes::F && ((AST::FNode*)head->head[0])->function->type == Types::BINARY_OPERATOR) { 
 			return "\\left({" + tailStrings[0] + "} " + getObjectName(((AST::FNode*)head->head[0])->function) + " {" + tailStrings[1] + "}\\right)";
 		}
@@ -169,6 +166,41 @@ void SlateContext::getRepetitionSignature(AST::Node* head, std::vector<AST::Node
   sameCount.push_back(1);
 }
 
+bool SlateContext::doSignaturesMatch(std::vector<size_t>& expression, std::vector<size_t>& simplification) {
+  if (simplification.size() > expression.size()) return false;
+  for (size_t i = 0;i < simplification.size();i++) {
+    if (expression[i] < simplification[i]) return false;
+  }
+  return true;
+}
+
+bool SlateContext::includesNode(SlateLanguage::AST::Node* node, SlateLanguage::AST::Node* tree) {
+  for(size_t i = 0;i < tree->tail.size();i++) {
+    if (includesNode(node,tree->tail[i])) return true;
+  }
+  return equalsNodes(node,tree);
+}
+
+bool SlateContext::includesAllBlocks(SlateLanguage::AST::Node* head, SlateLanguage::AST::Node* pattern) {
+  if (pattern->type == AST::NodeTypes::U) return true; // Unknowns just mark inputs
+  for (size_t i = 0;i < pattern->tail.size();i++) {
+    if(!includesAllBlocks(head,pattern->tail[i])) return false;
+  }
+  return includesNode(pattern,head); 
+}
+
+bool SlateContext::maybeDoSimplification(SlateLanguage::AST::Node* head, Simplification& s) {
+  if (!includesAllBlocks(head,s.from)) return false;
+  std::vector<AST::Node*> sectionsTemp;
+  std::vector<size_t> signatureHead;
+  std::vector<size_t> signatureS;
+  getRepetitionSignature(head, sectionsTemp, signatureHead);
+  sectionsTemp.clear();
+  getRepetitionSignature(s.from, sectionsTemp, signatureS);
+  if (!doSignaturesMatch(signatureHead, signatureS)) return false;
+  return true;
+} 
+
 /*
  * @brief Processes and updates the context with the TeX expression offered in the inputted string.
  * @param line = The string whicb holds the TeX expression
@@ -192,11 +224,9 @@ Object* SlateContext::interpret(std::string line) {
   } else {
     std::cout << "Could not be simplified!\n";
   }
-  std::vector<AST::Node*> subs;
-  std::vector<size_t> counts;
-  getRepetitionSignature(output,subs,counts);
-  for (size_t i = 0;i < counts.size();i++) {
-    std::cout << counts[i] << '\n';
+
+  for (Simplification& s : definitions.simplifications) {
+    std::cout << maybeDoSimplification(output,s) << '\n';
   }
 
 	std::string equals = "=";
@@ -280,7 +310,7 @@ bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::A
 	  }
 	  case AST::NodeTypes::Q:
 	  case AST::NodeTypes::J:
-		  return true;
+		  return first->head.size() == second->head.size() && first->tail.size() && second->head.size();
 	  case AST::NodeTypes::MARKER: {
 		  AST::Marker* firstM = (AST::Marker*)first;
 		  AST::Marker* secondM = (AST::Marker*)second;
