@@ -8,11 +8,17 @@
 #include "language/Parser.h"
 #include "objects/Expression.h"
 #include "objects/tuple/BiCategory.h" //X
+#include <algorithm>
+#include <climits>
+#include <compare>
+#include <cstddef>
 #include <iostream>
 #include <iterator>
 #include <stack>
 #include <unordered_map>
 #include "SlateType.h"
+
+#define TREE_PIVOT_FLAG 0
 
 using namespace SlateLanguage;
 
@@ -140,22 +146,23 @@ Expression* SlateContext::expressionFromAST(AST::Node* head, std::vector<std::st
 	return exp;
 }
 
-void SlateContext::getRepetitionSignature(AST::Node* head, std::vector<AST::Node*>& subSection, std::vector<size_t>& sameCount) {
+void SlateContext::getRepetitionSignature(AST::Node* head, RepetitionMap& map) {
+
   for (size_t i = 0;i < head->tail.size();i++) {
-    getRepetitionSignature(head->tail[i],subSection,sameCount);
+    getRepetitionSignature(head->tail[i],map);
   }
 
-  for (size_t i = 0;i < subSection.size();i++) {
-    if (equalsAST(head,subSection[i])) {
-      sameCount[i]++;
+  for (size_t i = 0;i < map.section.size();i++) {
+    if (equalsAST(head,map.section[i])) {
+      map.count[i]++;
       for(size_t j = 0;j < i;j++) {
-        if (sameCount[j] < sameCount[i]) {
-          size_t temp = sameCount[j];
-          sameCount[j] = sameCount[i];
-          sameCount[i] = temp;
-          AST::Node* tempNode = subSection[j];
-          subSection[j] = subSection[i];
-          subSection[i] = tempNode;
+        if (map.count[j] < map.count[i]) {
+          size_t temp = map.count[j];
+          map.count[j] = map.count[i];
+          map.count[i] = temp;
+          AST::Node* tempNode = map.section[j];
+          map.section[j] = map.section[i];
+          map.section[i] = tempNode;
           break;
         }
       }
@@ -163,8 +170,8 @@ void SlateContext::getRepetitionSignature(AST::Node* head, std::vector<AST::Node
     }
   }
 
-  subSection.push_back(head);
-  sameCount.push_back(1);
+  map.section.push_back(head);
+  map.count.push_back(1);
 }
 
 bool SlateContext::doSignaturesMatch(std::vector<size_t>& expression, std::vector<size_t>& simplification) {
@@ -190,17 +197,21 @@ bool SlateContext::includesAllBlocks(SlateLanguage::AST::Node* head, SlateLangua
   return includesNode(pattern,head); 
 }
 
-bool SlateContext::maybeDoSimplification(SlateLanguage::AST::Node* head, Simplification& s) {
+bool SlateContext::heuristicDoSimplification(SlateLanguage::AST::Node* head, Simplification& s, RepetitionMap& mapHead, RepetitionMap& mapSimplification) {
   if (!includesAllBlocks(head,s.from)) return false;
-  std::vector<AST::Node*> sectionsTemp;
-  std::vector<size_t> signatureHead;
-  std::vector<size_t> signatureS;
-  getRepetitionSignature(head, sectionsTemp, signatureHead);
-  sectionsTemp.clear();
-  getRepetitionSignature(s.from, sectionsTemp, signatureS);
-  if (!doSignaturesMatch(signatureHead, signatureS)) return false;
+  
+  getRepetitionSignature(head,mapHead);
+  getRepetitionSignature(s.from, mapSimplification);
+  if (!doSignaturesMatch(mapHead.count, mapSimplification.count)) return false;
   return true;
 } 
+
+SlateLanguage::AST::Node* SlateContext::toAST(std::string line) {
+  std::vector<Lexer::Token*> tokens;
+  Lexer::lexer(line, definitions, tokens);
+  AST::Node* output = Parser::parser(tokens);
+  return output;
+}
 
 /*
  * @brief Processes and updates the context with the TeX expression offered in the inputted string.
@@ -209,10 +220,7 @@ bool SlateContext::maybeDoSimplification(SlateLanguage::AST::Node* head, Simplif
  */
 Object* SlateContext::interpret(std::string line) {
 
-	std::vector<Lexer::Token*> tokens;
-	Lexer::lexer(line, definitions, tokens);
-
-	AST::Node* output = Parser::parser(tokens);
+	AST::Node* output = toAST(line);
 	AST::Node* outputCopy = AST::copyTree(output);
 
 	printNode(output);
@@ -227,7 +235,7 @@ Object* SlateContext::interpret(std::string line) {
   //  std::cout << "Could not be simplified!\n";
   //}
   //
-  produceTreeToPatternMoves(outputCopy,definitions.properties[1], prv);
+  //produceMoves(outputCopy,definitions.properties[1], prv);
 
   for (size_t i = 0;i < prv.size();i++) {
     std::vector<std::string> u;
@@ -260,11 +268,12 @@ Object* SlateContext::interpret(std::string line) {
 }
 
 void SlateContext::printNode(AST::Node* n, size_t spaces) {
-	for (size_t i = 0; i < spaces; i++) std::cout << "  ";
+	for (size_t i = 0; i < spaces; i++) std::cout << "  "; 
   if (n == nullptr) {
     std::cout << "NULL\n";
     return;
   }
+  if (n->getFlag(TREE_PIVOT_FLAG)) std::cout << "ANCH ";
 	switch (n->type) {
 	case AST::NodeTypes::F: {
 		std::cout << "F Node " << "(" + getObjectName(((AST::FNode*)n)->function) + ")\n";
@@ -296,7 +305,14 @@ void SlateContext::printNode(AST::Node* n, size_t spaces) {
  * @param second = Second node
  * @return Returns TRUE if both nodes are equal, FALSE otherwise
  */
-bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second, bool nullPlaceholder) {
+  if (first == nullptr || second == nullptr) {
+    if (nullPlaceholder) {
+      return true;
+    } else {
+      return first == nullptr && second == nullptr;
+    }
+  }
 	if (first->type != second->type) return false;
 	if (first->tail.size() != second->tail.size()) return false;
 	switch (first->type) {
@@ -335,10 +351,11 @@ bool SlateContext::equalsNodes(SlateLanguage::AST::Node* first, SlateLanguage::A
 	  }
 }
 
-bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
-	if (!equalsNodes(first, second)) return false;
+bool SlateContext::equalsAST(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second, bool nullPlaceholder) {
+	if (!equalsNodes(first, second, nullPlaceholder)) return false;
+  if (first == nullptr || second == nullptr) return true; // means both were null normally
 	for (size_t i = 0; i < first->tail.size(); i++) {
-		if (!equalsAST(first->tail[i], second->tail[i])) return false;
+		if (!equalsAST(first->tail[i], second->tail[i], nullPlaceholder)) return false;
 	}
 	return true;
 }
@@ -400,9 +417,12 @@ void SlateContext::populatePattern(SlateLanguage::AST::Node*& pattern, std::unor
           continue;
         }
       }
+      //std::cout << "DICK\n";
+     //printNode(patternTemplateInputs[name]);
+      //std::cout << patternTemplateInputs[name]->type << '\n';
       AST::Node* inputCopy = AST::copyTree(patternTemplateInputs[name]);
 			pattern->tail[i] = inputCopy;
-      inputCopy->head.push_back(pattern);
+      if (inputCopy != nullptr) inputCopy->head.push_back(pattern);
 		} else {
 			populatePattern(pattern->tail[i], patternTemplateInputs, throwExpIfNotFound);
 		}
@@ -428,7 +448,7 @@ bool SlateContext::simplifyTree(SlateLanguage::AST::Node*& head) {
 		if (checkPatternHead(head, eq.from, inputs)) {
 			AST::Node* pattern = AST::copyTree(eq.to);
 			populatePattern(pattern, inputs);
-      swapHeads(head,pattern);
+      swapHeads(head,pattern); // TODO: memory
 			head = pattern;
       modified = true;
       break;
@@ -437,88 +457,17 @@ bool SlateContext::simplifyTree(SlateLanguage::AST::Node*& head) {
 
 	return modified;
 }
-size_t l = 0;
-// The looping works since it is a finite group so elements have finite order
-bool SlateContext::reduceTree(SlateLanguage::AST::Node*& top, SlateLanguage::AST::Node*& head, std::vector<AST::Node*>& previous) {
-  //std::cout << '\n';
-  //printNode(top);
 
-  for (Property pr : definitions.properties) {
-    std::unordered_map<std::string, AST::Node*> inputs;
-    if (checkPatternHead(head, pr.from, inputs)) { 
-
-      AST::Node* pattern = AST::copyTree(pr.to);
-      populatePattern(pattern, inputs);
-      
-      AST::Node* old = head;
-      swapHeads(head,pattern);
-      head = pattern; 
-
-      bool looping = false;
-      for (AST::Node* back : previous) {
-        if (equalsAST(top,back)) {
-          looping = true;
-          break;
-        }
-      }
-      
-      if (looping) {
-        swapHeads(head,old);
-        head = old;
-        continue;
-      }
-
-      previous.push_back(AST::copyTree(top));
-
-
-      if (simplifyTree(top)) {
-        std::cout << "BEEP\n";
-        std::vector<AST::Node*> prv;
-        reduceTree(top,top,prv);
-        return true;
-      }
-
-      if(reduceTree(top, head, previous)) {
-        std::cout << "BOOP\n";
-        return true;
-      }
-      
-
-      bool anyTailsReduced = false;
-
-      for (size_t i = 0;i < head->tail.size();i++) {
-        std::vector<AST::Node*> prv;
-        //std::cout << l++ << '\n';
-        if (reduceTree(top,head->tail[i],prv)) {
-          anyTailsReduced = true;
-        }
-        //std::cout << l-- << '\n';
-      }
-
-      if (anyTailsReduced) {
-        simplifyTree(pattern);
-        return true;
-      }
-
-      swapHeads(head,old);
-      head = old;
-      previous.pop_back();
-      
-    }
-  } 
-  
-  return false;
-}
-
-void SlateContext::producePatternToTreeMoves(SlateLanguage::AST::Node* head, Property& p, std::vector<SlateLanguage::AST::Node*>& moves) {
+void SlateContext::producePatternToTreeMoves(SlateLanguage::AST::Node* head, Property& p, std::vector<Move>& moves) {
   for (size_t i = 0;i < head->tail.size();i++) {
-    std::vector<AST::Node*> tailPatterns;
+    if (head->tail[i] == nullptr) continue;
+    std::vector<Move> tailPatterns;
     producePatternToTreeMoves(head->tail[i], p, tailPatterns);
     for (size_t j = 0;j < tailPatterns.size();j++) {
       AST::Node* ownCopy = AST::copyTree(head);
-      ownCopy->tail[i] = tailPatterns[j];
-      tailPatterns[j]->head.push_back(ownCopy);
-      moves.push_back(ownCopy);
+      ownCopy->tail[i] = tailPatterns[j].to;
+      tailPatterns[j].to->head.push_back(ownCopy);
+      moves.push_back({head, ownCopy, p});
     }
   } 
 
@@ -526,12 +475,12 @@ void SlateContext::producePatternToTreeMoves(SlateLanguage::AST::Node* head, Pro
   if(checkPatternHead(head, p.to, map)) {
     AST::Node* pattern = AST::copyTree(p.from);
     populatePattern(pattern, map);
-    moves.push_back(pattern);
+    moves.push_back({head, pattern, p});
   }
   
 }
 
-void SlateContext::produceTreeToPatternMoves(SlateLanguage::AST::Node* head, Property& p, std::vector<SlateLanguage::AST::Node*>& moves, SlateLanguage::AST::Node* propertyHead) {
+void SlateContext::produceTreeToPatternMoves(SlateLanguage::AST::Node* head, Property& p, std::vector<Move>& moves, SlateLanguage::AST::Node* propertyHead) {
   if (propertyHead == nullptr) propertyHead = p.to;
 
   for (size_t i = 0;i < propertyHead->tail.size();i++) {
@@ -540,13 +489,312 @@ void SlateContext::produceTreeToPatternMoves(SlateLanguage::AST::Node* head, Pro
 
   std::unordered_map<std::string, AST::Node*> map;
   if (checkPatternHead(head, propertyHead, map)) {
-    AST::Node* pattern = AST::copyTree(p.to);
+    AST::Node* pattern = AST::copyTree(p.from);
     populatePattern(pattern, map, false);
-    moves.push_back(pattern);
+    moves.push_back({head, pattern, p});
   }
 
 }
 
-void SlateContext::produceMoves(AST::Node* head, Property& p, std::vector<AST::Node*>& moves, AST::Node* propertyHead) {
-  
+void SlateContext::produceMoves(AST::Node* head, Property& p, std::vector<Move>& moves) {
+  producePatternToTreeMoves(head, p, moves);
+  produceTreeToPatternMoves(head, p, moves);
+  //std::cout << moves.size() << '\n';
+}
+
+bool inHistory(AST::Node* n, std::vector<AST::Node*>& h) {
+  for (size_t i = 0;i < h.size();i++) {
+    if (h[i] == n) return true;
+  }
+  return false;
+}
+
+int fromIndex(AST::Node* tail, AST::Node* head) {
+  for (size_t i = 0;i < head->tail.size();i++) {
+    if (tail == head->tail[i]) return i;
+  }
+  return -1;
+}
+
+// second patter to check
+int SlateContext::localScoreNew(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second, std::vector<SlateLanguage::AST::Node*> history) {
+  if (second == nullptr) return 1;
+  int score = 0;
+  history.push_back(first);
+  if (equalsNodes(first,second)) {
+    score++;
+    for (size_t i = 0;i < first->tail.size();i++) {
+      if (second->tail.size() > i && !inHistory(first->tail[i], history)) score += localScoreNew(first->tail[i], second->tail[i],history);
+    }
+    for (size_t i = 0;i < first->head.size();i++) {
+      if (second->head.size() > i && !inHistory(first->head[i], history)) {
+        if (fromIndex(first, first->head[i]) == fromIndex(second, second->head[i])) {
+          score += localScoreNew(first->head[i], second->head[i],history);
+        }
+      } 
+    }
+  }
+  return score;
+}
+
+int SlateContext::globalScoreNew(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+  std::vector<AST::Node*> leafFirst = first->leafs();
+  std::vector<AST::Node*> leafSecond = second->leafs();
+  int scoreMax = INT_MIN;
+  // TODO: bruh O(n^2)
+  for (size_t i = 0;i < leafFirst.size();i++) {
+    for (size_t j = 0;j < leafSecond.size();j++) {
+      int score = localScoreNew(leafFirst[i], leafSecond[j]);
+      if (score > scoreMax) scoreMax = score;
+    }
+  }
+  return scoreMax;
+}
+
+int SlateContext::flaggedTailScore(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+  if (first == nullptr || second == nullptr) return -1;
+  if (!first->getFlag(TREE_PIVOT_FLAG)) {
+    for (size_t i = 0;i < first->tail.size();i++) {
+      int res = flaggedTailScore(first->tail[i], second);
+      if (res != -1) return res; 
+    }
+    return -1;
+  } else {
+    if (!second->getFlag(TREE_PIVOT_FLAG)) {
+      for (size_t i = 0;i < second->tail.size();i++) {
+        int res = flaggedTailScore(first, second->tail[i]);
+        if (res != -1) return res;
+      }
+      return -1;
+    } else {
+      return localScoreNew(first, second);
+    }
+  }
+}
+
+// easy but bad
+int SlateContext::markLastNode(SlateLanguage::AST::Node* tree, int depth, SlateLanguage::AST::Node* equals) {
+  if (tree == nullptr) return -1; 
+  tree->setFlags(TREE_PIVOT_FLAG, true);
+  int maxDepth = depth;
+  for (size_t i = 0;i < tree->tail.size();i++) {
+    if (tree->tail[i] == nullptr) continue;
+    int d = markLastNode(tree->tail[i],depth + 1, equals);
+    if (d >= maxDepth) {
+      maxDepth = d;
+      tree->setFlags(TREE_PIVOT_FLAG, false);
+      for (size_t j = 0;j < tree->tail.size();j++) {
+        if (i != j && tree->tail[j] != nullptr) tree->tail[j]->clearFlags(); 
+      }
+    } else {
+      tree->tail[i]->clearFlags();
+    }
+    //if (d == -1) tree->tail[i]->clearFlags();
+  }
+  if (maxDepth == depth) if (equals != nullptr && !equalsNodes(tree, equals)) {
+    return -1;
+  } 
+  return maxDepth;
+}
+
+SlateLanguage::AST::Node* SlateContext::getAnchor(SlateLanguage::AST::Node* tree) {
+  if (tree->getFlag(TREE_PIVOT_FLAG)) return tree;
+  for (size_t i = 0;i < tree->tail.size();i++) {
+    if (tree->tail[i] == nullptr) continue;
+    AST::Node* returned = getAnchor(tree->tail[i]);
+    if (returned != nullptr) return returned;
+  }
+  return nullptr;
+}
+
+// WE LOVE PARAMETERS I WANT MORE PARAMETERS
+void SlateContext::generateSimplifcationTargets(RepetitionMap& head,
+                                                RepetitionMap& pattern,
+                                                size_t headSize,
+                                                SlateLanguage::AST::Node* patternHead,
+                                                std::vector<SlateLanguage::AST::Node*>& results,
+                                                std::unordered_map<std::string, SlateLanguage::AST::Node*> mappings,
+                                                size_t searchIndex) {
+  if (searchIndex >= pattern.section.size()) {
+    patternHead = AST::copyTree(patternHead);
+    populatePattern(patternHead, mappings,false);
+    if (!patternHead->anyNull() && patternHead->size() <= headSize) results.push_back(patternHead);
+    return;
+  }
+  while (pattern.section[searchIndex]->type != SlateLanguage::AST::NodeTypes::U) {
+     searchIndex++;
+     if (searchIndex >= pattern.section.size()) {
+        patternHead = AST::copyTree(patternHead);
+        populatePattern(patternHead, mappings,false);
+        if (!patternHead->anyNull() && patternHead->size() <= headSize) results.push_back(patternHead);
+        return;
+     }
+  } 
+  for (size_t i = 0;i < head.section.size();i++) {
+    if (head.section[i] != nullptr && head.count[i] >= pattern.count[searchIndex]) {
+      //std::cout << "F " << ((AST::UNode*)pattern.section[searchIndex])->name << " " << head.section[i]->type << " " << i << '\n';
+      mappings[((AST::UNode*)pattern.section[searchIndex])->name] = head.section[i];
+      head.count[i] -= pattern.count[searchIndex];
+      generateSimplifcationTargets(head, pattern, headSize, patternHead, results, mappings, searchIndex + 1);
+      head.count[i] += pattern.count[searchIndex];
+    }
+  } 
+}
+
+int SlateContext::stateScoreNewNew(SlateLanguage::AST::Node* first, SlateLanguage::AST::Node* second) {
+  markLastNode(second);
+  //std::cout << "FIRST\n";
+  //printNode(second);
+  AST::Node* pivot = getAnchor(second);
+  markLastNode(first,0,pivot);
+  //std::cout << "SECOND\n";
+  //printNode(first);
+  int score = flaggedTailScore(first, second);
+  first->clearFlags();
+  second->clearFlags();
+  return score;
+}
+
+std::vector<Move>* SlateContext::AStartMoveSearch(SlateLanguage::AST::Node* start, SlateLanguage::AST::Node* end, std::vector<AST::Node*>& history) {
+  start->clearFlags(); 
+  //std::cout << " >>>>> SEARCH START WITH\n";
+  //printNode(start);
+
+  history.push_back(start);
+  std::vector<Move> moves;
+  for (Property& p : definitions.properties) {
+     produceMoves(start, p, moves);
+  } 
+  std::vector<MoveResult> results;
+  //std::cout << "PRODUCED MOVES\n";
+  for (size_t i = 0;i < moves.size();i++) {
+      bool loop = false;
+      for (size_t j = 0;j < history.size();j++) {
+        if (equalsAST(moves[i].to, history[j])) {
+          loop = true;
+          break;
+        }
+      }
+      if (loop) results.push_back({moves[i],0});
+      else {
+        int score  = stateScoreNewNew(end,moves[i].to);
+        results.push_back({moves[i], score});
+      }
+    //printNode(moves[i]);
+    //std::cout << "SCORE: " << scores[i] << '\n';
+    //std::cout << "SIZE: " << moves[i]->size();
+  }
+
+  //int maxScore = INT_MIN;
+  //for (size_t i = 0;i < moves.size();i++) {
+    //if (scores[i] > maxScore) maxScore = scores[i];
+  //}
+  //std::cout << "MAX SCORE: " << maxScore << '\n';
+
+  std::sort(results.begin(), results.end(), [](MoveResult a, MoveResult b) {
+    return a.score > b.score;
+  });
+
+  for (size_t i = 0;i < results.size();i++) {
+    if (true) { // TODO: ||true
+      AST::Node* best = results[i].move.to;
+      //std::cout << "TEST\n";
+      //printNode(best);
+      if (best == nullptr || best->size() > end->size()) {
+        continue;
+      }
+      bool loop = false;
+      for (size_t j = 0;j < history.size();j++) {
+        if (equalsAST(best, history[j])) {
+          loop = true;
+          break;
+        }
+      }
+      if (loop) continue;
+      //if (equalsAST(best,start)) {
+      //  continue;
+      //}
+      //std::cout << "NEXT MOVE\n";
+      //printNode(best);
+      //std::cout << "SCORE: " << scores[i] << '\n';
+      if (results[i].score == best->size()) {
+        std::cout << "SCORE REACHED\n";
+        printNode(best);
+        std::vector<Move>* movesHistory = new std::vector<Move>();
+        movesHistory->push_back(results[i].move);
+        return movesHistory;
+      } 
+      std::vector<Move>* moveHistory = AStartMoveSearch(best, end, history);
+      if(moveHistory != nullptr) {
+        moveHistory->push_back(results[i].move);
+        return moveHistory;
+      }
+    }
+  }
+
+  std::cout << ":(\n";
+  return nullptr;
+}
+
+bool SlateContext::containsTree(AST::Node* fixed, AST::Node* other) {
+  if (equalsAST(fixed, other, true)) return true;
+  for (size_t i = 0;i < fixed->tail.size();i++) {
+    if (containsTree(fixed->tail[i], other)) return true;
+  }
+  return false;
+}
+
+void SlateContext::invertMove(SlateLanguage::AST::Node*& head, AST::Node*& originalHead, Move& m) {
+  std::unordered_map<std::string, AST::Node*> inputs;
+  if (containsTree(AST::treeTop(head), m.from)) return;
+  std::cout << "MMM\n";
+  printNode(head);
+  printNode(m.propertyUsed.from);
+  printNode(m.from);
+  if (checkPatternHead(head, m.propertyUsed.from, inputs)) {
+    std::cout << inputs.size() << "PATTERN FOUND\n";
+    AST::Node* copy = AST::copyTree(m.propertyUsed.to);
+    populatePattern(copy, inputs);
+    std::cout << "FSDF\n";
+    AST::Node* headCopy = AST::copyTreeWhole(head);
+    std::cout << "HEAD COPY\n";
+    swapHeads(headCopy, copy);
+    printNode(AST::treeTop(copy));
+    if (containsTree(AST::treeTop(copy), m.from)) {
+      std::cout << "YAY\n";
+      swapHeads(head, copy);
+      head = copy;
+      return;
+    }
+  }
+  for (size_t i = 0;i < head->tail.size();i++) {
+    if (containsTree(originalHead, m.from)) break;
+    invertMove(head->tail[i], originalHead, m);
+  }
+}
+
+SlateLanguage::AST::Node* SlateContext::reduceTree_(SlateLanguage::AST::Node* head) {
+  do {
+    for (size_t i = 0;i < definitions.simplifications.size();i++) {
+      RepetitionMap headMap;
+      RepetitionMap simplificationMap;
+      bool mayDo = heuristicDoSimplification(head, definitions.simplifications[i], headMap, simplificationMap);
+      if (mayDo) {
+        std::vector<AST::Node*> starts;
+        generateSimplifcationTargets(headMap, simplificationMap, head->size(), definitions.simplifications[i].from, starts);
+        for (size_t j = 0;j < starts.size();j++) {
+          std::vector<AST::Node*> h;
+          std::vector<Move>* moves;
+          if ((moves = AStartMoveSearch(starts[j], head, h))) {
+            std::cout << "FINAL IS\n";
+            AST::Node* c = AST::copyTree(head);
+            for (size_t m = 0;m < moves->size();m++) invertMove(c,c,(*moves)[m]);
+            printNode(c);
+            return c;
+          }
+        }
+      }
+    }
+  } while(false && simplifyTree(head));
+  return head;
 }

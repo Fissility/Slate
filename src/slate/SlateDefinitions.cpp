@@ -381,7 +381,6 @@ Definitions SlateDefinitions::buildDefaultDefinitions() {
 
     }
   }
-
 	return defs;
 
 }

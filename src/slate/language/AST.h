@@ -1,11 +1,15 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "SlateErrors.h"
 
 #include "../objects/Object.h"
 #include "../objects/function/Function.h"
+
+#define MAX_NODE_FLAG_COUNT 4
 
 namespace SlateLanguage {
 	namespace AST {
@@ -23,11 +27,71 @@ namespace SlateLanguage {
 		typedef size_t NodeType;
 
 		class Node {
+    private:
+      bool flags[MAX_NODE_FLAG_COUNT];
 		public:
 			StringLocation debugLocation;
 			NodeType type;
 			std::vector<Node*> head;
 			std::vector<Node*> tail;
+
+      bool getFlag(int f) {
+        return flags[f];
+      }
+
+      void setFlags(int f, bool s) {
+        flags[f] = s;
+      }
+
+      bool contains(Node* other) {
+        if (this == other) return true;
+        for (size_t i = 0;i < tail.size();i++) {
+          if (tail[i]->contains(other)) return true;
+        }
+        return false;
+      }
+
+      bool anyNull() {
+        for (size_t i = 0;i < this->tail.size();i++) {
+          if (this->tail[i] == nullptr) return true;
+          if (this->tail[i]->anyNull()) return true;
+        }
+        return false;
+      }
+
+      size_t size() {
+        size_t total = 1;
+        for (size_t i = 0;i < tail.size();i++) {
+          if (tail[i] != nullptr) total += tail[i]->size();
+          else total++;
+        }
+        return total;
+      }
+
+      std::vector<Node*> leafs() {
+        std::vector<Node*> l;
+        if (tail.size() == 0) {
+          l.push_back(this);
+          return l;
+        }
+        for (size_t i = 0;i < tail.size();i++) {
+          if (tail[i] != nullptr) {
+            std::vector<Node*> other = tail[i]->leafs();
+            for (size_t j = 0;j < other.size();j++) l.push_back(other[j]);
+          }
+        }
+        return l;
+      }
+
+      void clearFlags() {
+        for (size_t i = 0;i < MAX_NODE_FLAG_COUNT;i++) {
+          flags[i] = false;
+        }
+        for (size_t i = 0;i < tail.size();i++) {
+          if (tail[i] != nullptr) tail[i]->clearFlags();
+        }
+      }
+       
 		};
 
 		class Marker : public Node {
@@ -82,6 +146,8 @@ namespace SlateLanguage {
 			}
 		};
 
+    extern Node* treeTop(Node* head);
 		extern Node* copyTree(Node* head);
+    extern Node* copyTreeWhole(Node* head, std::vector<size_t> path = std::vector<size_t>());
 	}
 }
